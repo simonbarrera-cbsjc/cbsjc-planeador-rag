@@ -1,5 +1,5 @@
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN || process.argv[2]
-const DEPLOYMENT_ID = 'dpl_AABca2Ug7WiujGgFL2BhcVACP2zT'
+const DEPLOYMENT_ID = 'dpl_8tjnJsyw528pmQDZQGg5diBDRxym'
 const DOMAIN = 'cbsjc-planeador-rag.vercel.app'
 
 async function assignAlias() {
@@ -13,7 +13,7 @@ async function assignAlias() {
   })
 
   const data = await res.json()
-  console.log('Alias response:', data)
+  console.log('Alias assigned:', data)
 }
 
 assignAlias().catch(console.error)
