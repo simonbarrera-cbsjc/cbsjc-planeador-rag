@@ -18,6 +18,7 @@ import {
 import {
   UploadCloud,
   FileText,
+  FileType,
   Trash2,
   RefreshCw,
   CheckCircle2,
@@ -91,21 +92,25 @@ export default function UploadPage() {
     fetchDocuments()
   }, [])
 
-  // File selection handler
+  // File selection handler (accepts PDF and DOCX)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0]
-      if (selectedFile.type !== 'application/pdf') {
+      const name = selectedFile.name.toLowerCase()
+      const isPdf = name.endsWith('.pdf')
+      const isDocx = name.endsWith('.docx') || name.endsWith('.doc')
+
+      if (!isPdf && !isDocx) {
         toast({
           title: 'Formato no soportado',
-          description: 'Por favor selecciona únicamente archivos en formato PDF (.pdf)',
+          description: 'Por favor selecciona archivos en formato PDF (.pdf) o Word (.docx)',
           variant: 'error',
         })
         return
       }
       setFile(selectedFile)
       if (!title) {
-        setTitle(selectedFile.name.replace(/\.pdf$/i, ''))
+        setTitle(selectedFile.name.replace(/\.(pdf|docx|doc)$/i, ''))
       }
     }
   }
@@ -115,7 +120,7 @@ export default function UploadPage() {
     e.preventDefault()
 
     if (!file) {
-      toast({ title: 'Archivo requerido', description: 'Selecciona un archivo PDF para continuar', variant: 'warning' })
+      toast({ title: 'Archivo requerido', description: 'Selecciona un archivo PDF o Word para continuar', variant: 'warning' })
       return
     }
 
@@ -127,7 +132,7 @@ export default function UploadPage() {
     try {
       setIsUploading(true)
       setUploadProgress(20)
-      setStatusMessage('Subiendo archivo al almacenamiento seguro...')
+      setStatusMessage('Subiendo archivo al almacenamiento institucional...')
 
       const formData = new FormData()
       formData.append('file', file)
@@ -165,7 +170,7 @@ export default function UploadPage() {
       setStatusMessage('¡Documento rector vectorizado e integrado con éxito!')
 
       toast({
-        title: '¡Documento listo!',
+        title: '¡Documento listo en RAG!',
         description: `Se han generado e indexado ${embedJson.chunkCount} fragmentos en la base de datos vectorial.`,
         variant: 'success',
       })
@@ -243,7 +248,7 @@ export default function UploadPage() {
       <div>
         <h1 className="text-2xl font-black text-[#0E1B4D]">Documentos Rectores y Base de Conocimiento</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Sube los planes de área, mallas curriculares, lineamientos institucionales y formatos del Colegio Bilingüe San José Campestre para alimentar el motor RAG.
+          Sube planes de área, mallas curriculares, lineamientos y formatos institucionales en <strong className="text-slate-800 font-semibold">PDF o Word (.docx)</strong> para alimentar el motor RAG.
         </p>
       </div>
 
@@ -252,10 +257,10 @@ export default function UploadPage() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2 text-[#0E1B4D] font-bold">
             <UploadCloud className="h-5 w-5 text-[#D71921]" />
-            Subir Nuevo Documento Rector (PDF)
+            Subir Nuevo Documento Rector (PDF o Word .docx)
           </CardTitle>
           <CardDescription>
-            El sistema extraerá el contenido, lo dividirá en fragmentos semánticos y creará vectores de búsqueda con Google AI Studio.
+            El sistema extraerá automáticamente el contenido, lo dividirá en fragmentos semánticos y creará vectores de búsqueda con Google AI Studio.
           </CardDescription>
         </CardHeader>
 
@@ -273,26 +278,32 @@ export default function UploadPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="application/pdf"
+                accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
                 className="hidden"
                 onChange={handleFileChange}
               />
               <div className="flex flex-col items-center justify-center space-y-2">
                 <div className={`p-3 rounded-xl ${file ? 'bg-emerald-100 text-emerald-700' : 'bg-[#162874]/10 text-[#162874]'}`}>
-                  <FileText className="h-7 w-7" />
+                  {file?.name.endsWith('.docx') || file?.name.endsWith('.doc') ? (
+                    <FileType className="h-7 w-7 text-sky-600" />
+                  ) : (
+                    <FileText className="h-7 w-7" />
+                  )}
                 </div>
                 {file ? (
                   <div>
                     <p className="text-sm font-bold text-emerald-900">{file.name}</p>
-                    <p className="text-xs text-emerald-700">{(file.size / (1024 * 1024)).toFixed(2)} MB • Listo para procesar</p>
+                    <p className="text-xs text-emerald-700">
+                      {(file.size / (1024 * 1024)).toFixed(2)} MB • {file.name.endsWith('.docx') ? 'Documento Word (.docx)' : 'Documento PDF'} • Listo para procesar
+                    </p>
                   </div>
                 ) : (
                   <div>
                     <p className="text-sm font-bold text-slate-700">
-                      Haz clic para seleccionar o arrastra un archivo PDF
+                      Haz clic para seleccionar o arrastra un archivo PDF o Word (.docx)
                     </p>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Máximo 50 MB por archivo • Formato PDF institucional
+                      Formatos compatibles: PDF, Word (.docx) • Máximo 50 MB por archivo
                     </p>
                   </div>
                 )}
@@ -421,6 +432,7 @@ export default function UploadPage() {
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-semibold">
                   <tr>
                     <th className="p-3.5">Documento</th>
+                    <th className="p-3.5">Formato</th>
                     <th className="p-3.5">Área / Nivel</th>
                     <th className="p-3.5">Estado</th>
                     <th className="p-3.5">Fragmentos</th>
@@ -429,72 +441,88 @@ export default function UploadPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {documents.map((doc) => (
-                    <tr key={doc.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3.5 font-bold text-slate-900 max-w-xs truncate">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-[#162874] shrink-0" />
-                          <span className="truncate">{doc.title}</span>
-                        </div>
-                        {doc.description && (
-                          <p className="text-[11px] text-slate-400 font-normal truncate mt-0.5">{doc.description}</p>
-                        )}
-                      </td>
-                      <td className="p-3.5">
-                        <div className="space-y-0.5">
-                          <p className="font-semibold text-slate-800">{formatArea(doc.area)}</p>
-                          <p className="text-[10px] text-slate-400">{formatNivel(doc.category)}</p>
-                        </div>
-                      </td>
-                      <td className="p-3.5">
-                        <Badge
-                          variant={
-                            doc.status === 'ready'
-                              ? 'success'
-                              : doc.status === 'processing'
-                              ? 'warning'
-                              : doc.status === 'error'
-                              ? 'destructive'
-                              : 'secondary'
-                          }
-                          className="capitalize text-[10px] font-bold"
-                        >
-                          {doc.status === 'ready' ? 'Listo (RAG)' : doc.status}
-                        </Badge>
-                      </td>
-                      <td className="p-3.5">
-                        <span className="font-bold text-slate-700">{doc.chunk_count || 0}</span>
-                        <span className="text-slate-400 text-[10px] ml-1">vectores</span>
-                      </td>
-                      <td className="p-3.5 text-slate-500 whitespace-nowrap">
-                        {formatDate(doc.created_at)}
-                      </td>
-                      <td className="p-3.5 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            title="Re-procesar vectores"
-                            onClick={() => handleReprocess(doc.id)}
-                            disabled={reprocessingId === doc.id}
-                            className="h-8 w-8 p-0 text-slate-600 hover:text-[#162874]"
+                  {documents.map((doc) => {
+                    const isDocx =
+                      doc.storage_path?.toLowerCase().endsWith('.docx') ||
+                      doc.storage_path?.toLowerCase().endsWith('.doc') ||
+                      doc.file_type === 'docx'
+
+                    return (
+                      <tr key={doc.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3.5 font-bold text-slate-900 max-w-xs truncate">
+                          <div className="flex items-center gap-2">
+                            {isDocx ? (
+                              <FileType className="h-4 w-4 text-sky-600 shrink-0" />
+                            ) : (
+                              <FileText className="h-4 w-4 text-[#162874] shrink-0" />
+                            )}
+                            <span className="truncate">{doc.title}</span>
+                          </div>
+                          {doc.description && (
+                            <p className="text-[11px] text-slate-400 font-normal truncate mt-0.5">{doc.description}</p>
+                          )}
+                        </td>
+                        <td className="p-3.5">
+                          <Badge variant="outline" className={`text-[10px] font-bold ${isDocx ? 'border-sky-300 text-sky-700 bg-sky-50' : 'border-rose-300 text-rose-700 bg-rose-50'}`}>
+                            {isDocx ? 'Word (.docx)' : 'PDF'}
+                          </Badge>
+                        </td>
+                        <td className="p-3.5">
+                          <div className="space-y-0.5">
+                            <p className="font-semibold text-slate-800">{formatArea(doc.area)}</p>
+                            <p className="text-[10px] text-slate-400">{formatNivel(doc.category)}</p>
+                          </div>
+                        </td>
+                        <td className="p-3.5">
+                          <Badge
+                            variant={
+                              doc.status === 'ready'
+                                ? 'success'
+                                : doc.status === 'processing'
+                                ? 'warning'
+                                : doc.status === 'error'
+                                ? 'destructive'
+                                : 'secondary'
+                            }
+                            className="capitalize text-[10px] font-bold"
                           >
-                            <RefreshCw className={`h-3.5 w-3.5 ${reprocessingId === doc.id ? 'animate-spin' : ''}`} />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            title="Eliminar documento rector"
-                            onClick={() => handleDelete(doc.id)}
-                            disabled={deletingId === doc.id}
-                            className="h-8 w-8 p-0 text-slate-600 hover:text-red-600"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {doc.status === 'ready' ? 'Listo (RAG)' : doc.status}
+                          </Badge>
+                        </td>
+                        <td className="p-3.5">
+                          <span className="font-bold text-slate-700">{doc.chunk_count || 0}</span>
+                          <span className="text-slate-400 text-[10px] ml-1">vectores</span>
+                        </td>
+                        <td className="p-3.5 text-slate-500 whitespace-nowrap">
+                          {formatDate(doc.created_at)}
+                        </td>
+                        <td className="p-3.5 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Re-procesar vectores"
+                              onClick={() => handleReprocess(doc.id)}
+                              disabled={reprocessingId === doc.id}
+                              className="h-8 w-8 p-0 text-slate-600 hover:text-[#162874]"
+                            >
+                              <RefreshCw className={`h-3.5 w-3.5 ${reprocessingId === doc.id ? 'animate-spin' : ''}`} />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Eliminar documento rector"
+                              onClick={() => handleDelete(doc.id)}
+                              disabled={deletingId === doc.id}
+                              className="h-8 w-8 p-0 text-slate-600 hover:text-red-600"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -503,7 +531,7 @@ export default function UploadPage() {
               <UploadCloud className="h-10 w-10 text-slate-300 mx-auto" />
               <p className="text-sm font-bold text-slate-700">No hay documentos rectores subidos</p>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Sube planes de área o manuales en formato PDF para que la inteligencia artificial pueda generar documentos precisos basados en ellos.
+                Sube planes de área o manuales en formato PDF o Word (.docx) para que la inteligencia artificial pueda generar documentos precisos basados en ellos.
               </p>
             </div>
           )}

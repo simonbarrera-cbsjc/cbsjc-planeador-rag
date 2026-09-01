@@ -2,7 +2,7 @@
  * @file app/api/embed/route.ts
  * @description POST /api/embed
  *
- * Accepts a sourceDocId, downloads the PDF from Supabase Storage,
+ * Accepts a sourceDocId, downloads the file (PDF or DOCX) from Supabase Storage,
  * extracts text, chunks it, generates embeddings in batches via text-embedding-004,
  * and persists them to document_chunks. Updates source_document status throughout.
  *
@@ -15,6 +15,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { extractTextFromPdf } from '@/lib/ai/pdf-parser'
+import { extractTextFromDocx } from '@/lib/ai/docx-parser'
 import { chunkText } from '@/lib/ai/chunker'
 import { generateEmbeddings } from '@/lib/ai/embeddings'
 import {
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .eq('id', sourceDocId)
 
   try {
-    // 1. Download the PDF from Supabase Storage
+    // 1. Download the file from Supabase Storage
     const { data: fileData, error: downloadError } = await supabaseAdmin.storage
       .from('source-documents')
       .download(doc.storage_path)
@@ -94,13 +95,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       throw new Error(`Error descargando archivo de Storage: ${downloadError?.message ?? 'vacío'}`)
     }
 
-    const pdfBuffer = Buffer.from(await fileData.arrayBuffer())
+    const fileBuffer = Buffer.from(await fileData.arrayBuffer())
 
-    // 2. Extract text from PDF
-    const { text: rawText } = await extractTextFromPdf(pdfBuffer)
+    // 2. Extract text from PDF or DOCX
+    let rawText = ''
+    const isDocx =
+      doc.storage_path.toLowerCase().endsWith('.docx') ||
+      doc.storage_path.toLowerCase().endsWith('.doc') ||
+      doc.file_type === 'docx' ||
+      doc.file_type?.includes('word')
+
+    if (isDocx) {
+      const { text } = await extractTextFromDocx(fileBuffer)
+      rawText = text
+    } else {
+      const { text } = await extractTextFromPdf(fileBuffer)
+      rawText = text
+    }
 
     if (!rawText || rawText.trim().length === 0) {
-      throw new Error('La extracción de texto del PDF devolvió contenido vacío.')
+      throw new Error('La extracción de texto del documento devolvió contenido vacío.')
     }
 
     // 3. Chunk the text

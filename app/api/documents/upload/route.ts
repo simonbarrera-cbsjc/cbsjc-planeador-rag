@@ -2,7 +2,7 @@
  * @file app/api/documents/upload/route.ts
  * @description POST /api/documents/upload
  *
- * Accepts multipart/form-data upload with a PDF file plus metadata.
+ * Accepts multipart/form-data upload with PDF or DOCX file plus metadata.
  * Saves file to Supabase Storage and creates record in `source_documents`.
  */
 
@@ -19,7 +19,6 @@ import {
 } from '@/lib/security/rate-limit'
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
-const ALLOWED_MIME_TYPE = 'application/pdf'
 const STORAGE_BUCKET = 'source-documents'
 
 const DOCUMENT_CATEGORIES = ['primaria', 'secundaria', 'bachillerato', 'general'] as const
@@ -49,6 +48,20 @@ function sanitiseFilename(name: string): string {
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9._-]/g, '')
     .slice(0, 150)
+}
+
+function isValidFileType(file: File): boolean {
+  const name = file.name.toLowerCase()
+  const mime = file.type.toLowerCase()
+  const isPdf = name.endsWith('.pdf') || mime === 'application/pdf'
+  const isDocx =
+    name.endsWith('.docx') ||
+    name.endsWith('.doc') ||
+    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mime === 'application/msword' ||
+    mime === 'application/octet-stream'
+
+  return isPdf || isDocx
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -97,12 +110,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { title, category, area, description } = parsed.data
 
   if (!(file instanceof File)) {
-    return NextResponse.json({ success: false, error: 'Se requiere un archivo PDF' }, { status: 400 })
+    return NextResponse.json({ success: false, error: 'Se requiere un archivo PDF o Word (.docx)' }, { status: 400 })
   }
 
-  if (file.type !== ALLOWED_MIME_TYPE && !file.name.endsWith('.pdf')) {
+  if (!isValidFileType(file)) {
     return NextResponse.json(
-      { success: false, error: 'Únicamente se permiten archivos en formato PDF (.pdf)' },
+      { success: false, error: 'Únicamente se permiten archivos en formato PDF (.pdf) o Word (.docx)' },
       { status: 415 }
     )
   }
@@ -117,14 +130,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const timestamp = Date.now()
   const safeName = sanitiseFilename(file.name)
   const storagePath = `${user.id}/${timestamp}-${safeName}`
-
   const fileBuffer = Buffer.from(await file.arrayBuffer())
 
   // Upload to Supabase Storage
   const { error: uploadError } = await supabaseAdmin.storage
     .from(STORAGE_BUCKET)
     .upload(storagePath, fileBuffer, {
-      contentType: ALLOWED_MIME_TYPE,
+      contentType: file.type || (file.name.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf'),
       upsert: false,
     })
 
@@ -146,12 +158,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       category,
       area,
       storage_path: storagePath,
-      file_type: ALLOWED_MIME_TYPE,
+      file_type: file.name.endsWith('.docx') ? 'docx' : 'pdf',
       file_size: file.size,
       status: 'pending',
       chunk_count: null,
       error_message: null,
-      metadata: {},
+      metadata: { original_filename: file.name },
     })
     .select('id')
     .single()
