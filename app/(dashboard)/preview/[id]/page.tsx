@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -146,7 +147,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
   if (loading) {
     return (
       <div className="p-16 text-center space-y-3">
-        <Loader2 className="h-8 w-8 animate-spin text-[#003087] mx-auto" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#162874] mx-auto" />
         <p className="text-sm font-semibold text-slate-700">Cargando documento institucional...</p>
       </div>
     )
@@ -157,7 +158,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
       <div className="p-16 text-center space-y-4">
         <p className="text-base font-bold text-slate-800">Documento no encontrado</p>
         <Link href="/history">
-          <Button variant="outline">Volver al Historial</Button>
+          <Button variant="outline" className="rounded-xl">Volver al Historial</Button>
         </Link>
       </div>
     )
@@ -169,16 +170,16 @@ export default function PreviewPage({ params }: PreviewPageProps) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div className="flex items-center gap-3">
           <Link href="/history">
-            <Button variant="ghost" size="sm" className="h-9 px-2.5 text-slate-600">
+            <Button variant="ghost" size="sm" className="h-9 px-2.5 text-slate-600 rounded-xl">
               <ArrowLeft className="h-4 w-4 mr-1" />
               Historial
             </Button>
           </Link>
           <div className="h-4 w-px bg-slate-200" />
-          <Badge variant="default" className="bg-[#003087] text-xs">
+          <Badge variant="default" className="bg-[#162874] text-xs font-bold">
             {formatDocumentType(document.document_type)}
           </Badge>
-          <Badge variant="secondary" className="uppercase text-xs font-bold">
+          <Badge variant="secondary" className="uppercase text-xs font-bold text-[#D71921] bg-red-50">
             {document.language}
           </Badge>
         </div>
@@ -189,7 +190,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
             size="sm"
             variant="outline"
             onClick={() => window.print()}
-            className="text-xs font-semibold"
+            className="text-xs font-bold rounded-xl border-slate-300"
           >
             <Printer className="h-3.5 w-3.5 mr-1.5" />
             Imprimir
@@ -199,7 +200,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
             size="sm"
             onClick={handleSave}
             disabled={isSaving}
-            className="bg-[#003087] hover:bg-[#002060] text-white text-xs font-bold shadow-sm"
+            className="bg-[#162874] hover:bg-[#0E1B4D] text-white text-xs font-bold shadow-sm rounded-xl"
           >
             {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
             Guardar Cambios
@@ -211,20 +212,28 @@ export default function PreviewPage({ params }: PreviewPageProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Document Editor / Viewer (2 cols) */}
         <div className="lg:col-span-2 space-y-4">
-          <Card className="border-slate-200 shadow-md">
+          <Card className="border-slate-200 shadow-md rounded-2xl bg-white overflow-hidden">
             {/* Formal Institutional Header in the Document Card */}
-            <div className="p-6 bg-slate-50/80 border-b border-slate-200 rounded-t-xl">
+            <div className="p-6 bg-[#0E1B4D] text-white border-b border-[#0A1435]">
               <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-sm font-black tracking-wide text-[#003087] uppercase">
-                    Colegio Bilingüe San José Campestre
-                  </h2>
-                  <p className="text-[11px] font-semibold text-[#C8A84B] uppercase">
-                    Sistema de Gestión y Planeación Curricular Oficial
-                  </p>
+                <div className="flex items-center gap-3">
+                  <div className="relative w-10 h-10 shrink-0 drop-shadow">
+                    <Image
+                      src="/logo.png"
+                      alt="Escudo CBSJC"
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-serif text-slate-300 block">Colegio bilingüe</span>
+                    <h2 className="text-xs font-black uppercase tracking-wider text-white">
+                      <span className="text-[#D71921]">San José</span> Campestre
+                    </h2>
+                  </div>
                 </div>
-                <div className="text-right text-[11px] text-slate-500">
-                  <p className="font-semibold text-slate-700">{formatDate(document.created_at)}</p>
+                <div className="text-right text-[11px] text-slate-300">
+                  <p className="font-bold text-white">{formatDate(document.created_at)}</p>
                   <p>{formatArea(document.area)}</p>
                 </div>
               </div>
@@ -233,7 +242,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
             <CardContent className="p-6 space-y-4">
               <div className="space-y-1">
                 <Label htmlFor="docTitle" className="text-xs text-slate-400">Título del Documento</Label>
-                <h1 className="text-xl font-bold text-slate-900">{document.title}</h1>
+                <h1 className="text-xl font-black text-slate-900">{document.title}</h1>
               </div>
 
               {/* Editable Markdown / Textarea */}
@@ -241,7 +250,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
                 <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>Contenido del Documento (Editable)</span>
                   {lastSaved && (
-                    <span className="text-emerald-600 font-medium">
+                    <span className="text-emerald-600 font-bold">
                       Guardado a las {lastSaved.toLocaleTimeString()}
                     </span>
                   )}
@@ -250,7 +259,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   rows={26}
-                  className="font-mono text-xs leading-relaxed p-4 bg-white border-slate-300 focus:border-[#003087]"
+                  className="font-mono text-xs leading-relaxed p-4 bg-white border-slate-300 focus:border-[#162874] rounded-xl"
                 />
               </div>
             </CardContent>
@@ -260,10 +269,10 @@ export default function PreviewPage({ params }: PreviewPageProps) {
         {/* Right Export Panel (1 col) */}
         <div className="space-y-6">
           {/* Export Formats Card */}
-          <Card className="border-slate-200 shadow-md bg-white">
+          <Card className="border-slate-200 shadow-md bg-white rounded-2xl">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-bold text-[#003087] flex items-center gap-2">
-                <FileDown className="h-4 w-4 text-[#C8A84B]" />
+              <CardTitle className="text-sm font-bold text-[#0E1B4D] flex items-center gap-2">
+                <FileDown className="h-4 w-4 text-[#D71921]" />
                 Exportar Documento
               </CardTitle>
               <CardDescription className="text-xs">
@@ -276,7 +285,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
               <Button
                 onClick={() => handleExport('pdf')}
                 disabled={exportingFormat !== null}
-                className="w-full h-11 bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-between px-4 shadow-sm"
+                className="w-full h-11 bg-[#D71921] hover:bg-[#B81219] text-white font-bold text-xs flex items-center justify-between px-4 shadow-sm rounded-xl"
               >
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
@@ -285,7 +294,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
                 {exportingFormat === 'pdf' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <span className="text-[10px] bg-red-800/60 px-2 py-0.5 rounded font-mono">PDF</span>
+                  <span className="text-[10px] bg-red-900/60 px-2 py-0.5 rounded font-mono">PDF</span>
                 )}
               </Button>
 
@@ -293,7 +302,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
               <Button
                 onClick={() => handleExport('docx')}
                 disabled={exportingFormat !== null}
-                className="w-full h-11 bg-[#003087] hover:bg-[#002060] text-white font-bold text-xs flex items-center justify-between px-4 shadow-sm"
+                className="w-full h-11 bg-[#162874] hover:bg-[#0E1B4D] text-white font-bold text-xs flex items-center justify-between px-4 shadow-sm rounded-xl"
               >
                 <div className="flex items-center gap-2">
                   <FileDown className="h-4 w-4" />
@@ -302,7 +311,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
                 {exportingFormat === 'docx' ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <span className="text-[10px] bg-[#001D52] px-2 py-0.5 rounded font-mono">DOCX</span>
+                  <span className="text-[10px] bg-[#0E1B4D] px-2 py-0.5 rounded font-mono">DOCX</span>
                 )}
               </Button>
 
@@ -311,7 +320,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
                 onClick={() => handleExport('gdocs')}
                 disabled={exportingFormat !== null}
                 variant="outline"
-                className="w-full h-11 border-slate-300 hover:bg-slate-50 font-bold text-xs text-slate-800 flex items-center justify-between px-4 shadow-sm"
+                className="w-full h-11 border-slate-300 hover:bg-slate-50 font-bold text-xs text-slate-800 flex items-center justify-between px-4 shadow-sm rounded-xl"
               >
                 <div className="flex items-center gap-2">
                   <ExternalLink className="h-4 w-4 text-amber-600" />
@@ -327,7 +336,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
           </Card>
 
           {/* Metadata Card */}
-          <Card className="border-slate-200 shadow-sm bg-slate-50/50">
+          <Card className="border-slate-200 shadow-sm bg-slate-50/50 rounded-2xl">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                 Ficha Técnica del Documento
@@ -356,7 +365,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
               )}
               <div className="flex justify-between py-1 border-b border-slate-200">
                 <span className="text-slate-500">Fuentes RAG:</span>
-                <span className="font-semibold text-emerald-700">{document.sources_used} fragmentos</span>
+                <span className="font-bold text-emerald-700">{document.sources_used} fragmentos</span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-slate-500">Motor IA:</span>

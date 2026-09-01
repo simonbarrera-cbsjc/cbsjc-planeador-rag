@@ -241,17 +241,17 @@ export default function UploadPage() {
     <div className="space-y-8 max-w-5xl mx-auto">
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-black text-[#003087]">Documentos Rectores y Base de Conocimiento</h1>
+        <h1 className="text-2xl font-black text-[#0E1B4D]">Documentos Rectores y Base de Conocimiento</h1>
         <p className="text-sm text-slate-500 mt-1">
           Sube los planes de área, mallas curriculares, lineamientos institucionales y formatos del Colegio Bilingüe San José Campestre para alimentar el motor RAG.
         </p>
       </div>
 
       {/* Upload Form Card */}
-      <Card className="border-slate-200 shadow-md">
+      <Card className="border-slate-200 shadow-md rounded-2xl bg-white">
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <UploadCloud className="h-5 w-5 text-[#003087]" />
+          <CardTitle className="text-base flex items-center gap-2 text-[#0E1B4D] font-bold">
+            <UploadCloud className="h-5 w-5 text-[#D71921]" />
             Subir Nuevo Documento Rector (PDF)
           </CardTitle>
           <CardDescription>
@@ -264,10 +264,10 @@ export default function UploadPage() {
             {/* Drag and Drop Box */}
             <div
               onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+              className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${
                 file
                   ? 'border-emerald-400 bg-emerald-50/40'
-                  : 'border-slate-300 hover:border-[#003087] bg-slate-50/50 hover:bg-slate-100/60'
+                  : 'border-slate-300 hover:border-[#D71921] bg-slate-50/50 hover:bg-slate-100/60'
               }`}
             >
               <input
@@ -278,7 +278,7 @@ export default function UploadPage() {
                 onChange={handleFileChange}
               />
               <div className="flex flex-col items-center justify-center space-y-2">
-                <div className={`p-3 rounded-full ${file ? 'bg-emerald-100 text-emerald-700' : 'bg-[#003087]/10 text-[#003087]'}`}>
+                <div className={`p-3 rounded-xl ${file ? 'bg-emerald-100 text-emerald-700' : 'bg-[#162874]/10 text-[#162874]'}`}>
                   <FileText className="h-7 w-7" />
                 </div>
                 {file ? (
@@ -288,7 +288,7 @@ export default function UploadPage() {
                   </div>
                 ) : (
                   <div>
-                    <p className="text-sm font-semibold text-slate-700">
+                    <p className="text-sm font-bold text-slate-700">
                       Haz clic para seleccionar o arrastra un archivo PDF
                     </p>
                     <p className="text-xs text-slate-400 mt-0.5">
@@ -309,13 +309,14 @@ export default function UploadPage() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
+                  className="rounded-xl"
                 />
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="category">Nivel Educativo *</Label>
                 <Select value={category} onValueChange={(val) => setCategory(val as DocumentCategory)}>
-                  <SelectTrigger id="category">
+                  <SelectTrigger id="category" className="rounded-xl">
                     <SelectValue placeholder="Selecciona el nivel" />
                   </SelectTrigger>
                   <SelectContent>
@@ -331,7 +332,7 @@ export default function UploadPage() {
               <div className="space-y-1.5">
                 <Label htmlFor="area">Área del Conocimiento *</Label>
                 <Select value={area} onValueChange={(val) => setArea(val as DocumentArea)}>
-                  <SelectTrigger id="area">
+                  <SelectTrigger id="area" className="rounded-xl">
                     <SelectValue placeholder="Selecciona el área" />
                   </SelectTrigger>
                   <SelectContent>
@@ -351,14 +352,15 @@ export default function UploadPage() {
                   placeholder="Ej: Actualizado según DBA 2026 y lineamientos SIEE"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
+                  className="rounded-xl"
                 />
               </div>
             </div>
 
             {/* Progress Bar when uploading */}
             {isUploading && (
-              <div className="space-y-2 p-4 rounded-lg bg-blue-50/70 border border-blue-100">
-                <div className="flex items-center justify-between text-xs font-semibold text-[#003087]">
+              <div className="space-y-2 p-4 rounded-xl bg-blue-50/70 border border-blue-100">
+                <div className="flex items-center justify-between text-xs font-bold text-[#162874]">
                   <span>{statusMessage}</span>
                   <span>{uploadProgress}%</span>
                 </div>
@@ -370,7 +372,7 @@ export default function UploadPage() {
             <Button
               type="submit"
               disabled={isUploading || !file}
-              className="w-full sm:w-auto bg-[#003087] hover:bg-[#002060] text-white font-bold px-6 h-11"
+              className="w-full sm:w-auto bg-[#D71921] hover:bg-[#B81219] text-white font-bold px-6 h-11 rounded-xl shadow-md transition-colors"
             >
               {isUploading ? (
                 <>
@@ -379,7 +381,7 @@ export default function UploadPage() {
                 </>
               ) : (
                 <>
-                  <Sparkles className="h-4 w-4 mr-2 text-[#C8A84B]" />
+                  <Sparkles className="h-4 w-4 mr-2" />
                   Subir y Vectorizar en RAG
                 </>
               )}
@@ -392,7 +394,7 @@ export default function UploadPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-[#003087]">Documentos Indexados en el Sistema</h2>
+            <h2 className="text-lg font-black text-[#0E1B4D]">Documentos Indexados en el Sistema</h2>
             <p className="text-xs text-slate-500">Documentos rectores actualmente consultables por la IA</p>
           </div>
           <Button
@@ -400,17 +402,17 @@ export default function UploadPage() {
             variant="outline"
             onClick={fetchDocuments}
             disabled={loadingDocs}
-            className="text-xs flex items-center gap-1.5"
+            className="text-xs font-bold flex items-center gap-1.5 rounded-xl border-slate-300"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loadingDocs ? 'animate-spin' : ''}`} />
             Actualizar
           </Button>
         </div>
 
-        <Card className="border-slate-200 shadow-sm overflow-hidden">
+        <Card className="border-slate-200 shadow-sm overflow-hidden rounded-2xl bg-white">
           {loadingDocs ? (
             <div className="p-8 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
-              <RefreshCw className="h-4 w-4 animate-spin text-[#003087]" />
+              <RefreshCw className="h-4 w-4 animate-spin text-[#162874]" />
               Cargando documentos rectores...
             </div>
           ) : documents.length > 0 ? (
@@ -431,7 +433,7 @@ export default function UploadPage() {
                     <tr key={doc.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="p-3.5 font-bold text-slate-900 max-w-xs truncate">
                         <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-[#003087] shrink-0" />
+                          <FileText className="h-4 w-4 text-[#162874] shrink-0" />
                           <span className="truncate">{doc.title}</span>
                         </div>
                         {doc.description && (
@@ -455,13 +457,13 @@ export default function UploadPage() {
                               ? 'destructive'
                               : 'secondary'
                           }
-                          className="capitalize text-[10px]"
+                          className="capitalize text-[10px] font-bold"
                         >
                           {doc.status === 'ready' ? 'Listo (RAG)' : doc.status}
                         </Badge>
                       </td>
                       <td className="p-3.5">
-                        <span className="font-semibold text-slate-700">{doc.chunk_count || 0}</span>
+                        <span className="font-bold text-slate-700">{doc.chunk_count || 0}</span>
                         <span className="text-slate-400 text-[10px] ml-1">vectores</span>
                       </td>
                       <td className="p-3.5 text-slate-500 whitespace-nowrap">
@@ -475,7 +477,7 @@ export default function UploadPage() {
                             title="Re-procesar vectores"
                             onClick={() => handleReprocess(doc.id)}
                             disabled={reprocessingId === doc.id}
-                            className="h-8 w-8 p-0 text-slate-600 hover:text-[#003087]"
+                            className="h-8 w-8 p-0 text-slate-600 hover:text-[#162874]"
                           >
                             <RefreshCw className={`h-3.5 w-3.5 ${reprocessingId === doc.id ? 'animate-spin' : ''}`} />
                           </Button>
@@ -497,9 +499,9 @@ export default function UploadPage() {
               </table>
             </div>
           ) : (
-            <div className="p-8 text-center space-y-2">
+            <div className="p-10 text-center space-y-2">
               <UploadCloud className="h-10 w-10 text-slate-300 mx-auto" />
-              <p className="text-sm font-semibold text-slate-700">No hay documentos rectores subidos</p>
+              <p className="text-sm font-bold text-slate-700">No hay documentos rectores subidos</p>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
                 Sube planes de área o manuales en formato PDF para que la inteligencia artificial pueda generar documentos precisos basados en ellos.
               </p>

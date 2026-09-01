@@ -4,18 +4,34 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { ShieldCheck, Sparkles, BookOpen, FileCheck2, Loader2, ArrowRight } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { useToast } from '@/hooks/use-toast'
+import {
+  Sparkles,
+  BookOpen,
+  FileCheck2,
+  Lock,
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
+  Mail,
+  GraduationCap,
+  AlertCircle,
+} from 'lucide-react'
 
 export default function LoginPage() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [email, setEmail] = useState('')
+  const [emailSent, setEmailSent] = useState(false)
+  const [loginMethod, setLoginMethod] = useState<'google' | 'email'>('google')
+  const { toast } = useToast()
   const supabase = createClient()
 
+  // Google OAuth Login
   const handleGoogleLogin = async () => {
     try {
-      setLoading(true)
-      setError(null)
+      setIsLoading(true)
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -26,116 +42,314 @@ export default function LoginPage() {
           },
         },
       })
-      if (error) throw error
+      if (error) {
+        if (error.message.includes('provider is not enabled') || error.message.includes('Unsupported provider')) {
+          toast({
+            title: 'Google OAuth pendiente de activación',
+            description: 'El proveedor Google aún no está activado en tu panel de Supabase. Puedes usar el acceso directo por correo.',
+            variant: 'warning',
+          })
+          setLoginMethod('email')
+        } else {
+          throw error
+        }
+      }
     } catch (err) {
       console.error('Login error:', err)
-      setError(err instanceof Error ? err.message : 'Error al iniciar sesión con Google')
-      setLoading(false)
+      toast({
+        title: 'Error de autenticación',
+        description: err instanceof Error ? err.message : 'No se pudo iniciar sesión con Google.',
+        variant: 'error',
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Institutional Magic Link / Email Login
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email || !email.includes('@')) {
+      toast({
+        title: 'Correo inválido',
+        description: 'Por favor ingresa un correo institucional válido.',
+        variant: 'error',
+      })
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim().toLowerCase(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+
+      if (error) throw error
+
+      setEmailSent(true)
+      toast({
+        title: 'Enlace de acceso enviado',
+        description: `Hemos enviado un enlace mágico a ${email}. Revisa tu bandeja de entrada.`,
+        variant: 'success',
+      })
+    } catch (err) {
+      console.error('Email login error:', err)
+      toast({
+        title: 'Error al enviar enlace',
+        description: err instanceof Error ? err.message : 'No se pudo enviar el enlace de acceso.',
+        variant: 'error',
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/40 to-slate-100 p-4 sm:p-6">
-      <div className="w-full max-w-md space-y-6">
-        {/* Branding Crest / Shield */}
-        <div className="text-center space-y-3">
-          <div className="relative mx-auto w-24 h-24 rounded-2xl overflow-hidden shadow-lg border-2 border-white/80 bg-white flex items-center justify-center p-2">
+    <div className="min-h-screen bg-[#0E1B4D] text-slate-100 flex flex-col justify-between relative overflow-hidden selection:bg-[#D71921] selection:text-white">
+      {/* Background Glows matching CBSJC Navy and Crimson Red */}
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#D71921]/25 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/3 -right-32 w-[32rem] h-[32rem] bg-[#162874]/70 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 left-1/3 w-96 h-96 bg-[#D71921]/20 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Top Institutional Header */}
+      <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between border-b border-white/10">
+        <div className="flex items-center gap-3.5">
+          <div className="relative w-12 h-12 drop-shadow-md">
             <Image
               src="/logo.png"
-              alt="Logo Colegio Bilingüe San José Campestre"
-              width={88}
-              height={88}
-              className="object-contain"
+              alt="Escudo Colegio Bilingüe San José Campestre"
+              fill
               priority
+              className="object-contain"
             />
           </div>
           <div>
-            <h1 className="text-2xl font-black tracking-tight text-[#003087]">
-              Colegio Bilingüe San José Campestre
-            </h1>
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#C8A84B] mt-1">
-              Sistema Inteligente de Planeación RAG
-            </p>
+            <span className="font-serif text-xs text-slate-300 block tracking-wide">
+              Colegio bilingüe
+            </span>
+            <span className="text-sm font-black tracking-tight text-white uppercase flex items-center gap-1.5">
+              <span className="text-[#D71921]">San José</span> Campestre
+            </span>
           </div>
         </div>
 
-        {/* Login Card */}
-        <Card className="border-slate-200/80 shadow-xl bg-white/95 backdrop-blur">
-          <CardHeader className="text-center pb-4">
-            <CardTitle className="text-xl font-bold text-slate-800">
-              Acceso Institucional
-            </CardTitle>
-            <CardDescription className="text-sm text-slate-500">
-              Ingresa con tu correo institucional de Google para acceder al generador de documentos y base de conocimiento.
-            </CardDescription>
-          </CardHeader>
+        <Badge
+          variant="outline"
+          className="bg-white/5 border-white/20 text-slate-200 text-xs px-3 py-1 font-semibold flex items-center gap-1.5 backdrop-blur-md"
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
+          Sistema RAG Curricular
+        </Badge>
+      </header>
 
-          <CardContent className="space-y-4">
-            {error && (
-              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-700 font-medium">
-                {error}
+      {/* Main Center Content */}
+      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-6 py-10 lg:py-16 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        {/* Left Column: Hero & Pedagogical Value */}
+        <div className="lg:col-span-7 space-y-8 text-left">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-md text-xs font-semibold text-slate-200">
+            <GraduationCap className="h-4 w-4 text-[#D71921]" />
+            <span>Inteligencia Artificial Curricular para Docentes y Directivos</span>
+          </div>
+
+          <div className="space-y-4">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.15]">
+              Planeación pedagógica <br className="hidden sm:inline" />
+              <span className="text-slate-100 font-extrabold">alineada con los</span>{' '}
+              <span className="text-[#D71921] underline decoration-white/20 underline-offset-8">
+                Documentos Rectores
+              </span>
+            </h1>
+            <p className="text-slate-300 text-base sm:text-lg max-w-2xl font-normal leading-relaxed">
+              Genera planeadores de clase, planes de área e informes pedagógicos con la precisión de <strong className="text-white font-semibold">Gemini 2.0 Flash</strong> y el motor <strong className="text-white font-semibold">RAG de Supabase</strong>, cumpliendo los DBA y lineamientos del CBSJC.
+            </p>
+          </div>
+
+          {/* Institutional Highlights Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm space-y-1.5 hover:bg-white/10 transition-colors">
+              <div className="w-8 h-8 rounded-xl bg-[#D71921]/20 flex items-center justify-center text-[#D71921]">
+                <BookOpen className="h-4 w-4" />
               </div>
-            )}
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                Documentos Rectores
+              </h3>
+              <p className="text-[11px] text-slate-300 leading-snug">
+                Indexación automática de PDFs institucionales y planes de área.
+              </p>
+            </div>
 
-            <Button
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className="w-full h-12 text-sm font-semibold bg-[#003087] hover:bg-[#002060] text-white transition-all shadow-md flex items-center justify-center gap-3"
-            >
-              {loading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm space-y-1.5 hover:bg-white/10 transition-colors">
+              <div className="w-8 h-8 rounded-xl bg-sky-500/20 flex items-center justify-center text-sky-400">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                Momentos de Clase
+              </h3>
+              <p className="text-[11px] text-slate-300 leading-snug">
+                Estructura DBA, inicio, desarrollo, evaluación y recursos.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm space-y-1.5 hover:bg-white/10 transition-colors">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                <FileCheck2 className="h-4 w-4" />
+              </div>
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                Multi-Exportación
+              </h3>
+              <p className="text-[11px] text-slate-300 leading-snug">
+                Descarga en PDF oficial con escudo, Word (.docx) o Google Docs.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Premium Auth Card */}
+        <div className="lg:col-span-5 w-full max-w-md mx-auto">
+          <div className="bg-white rounded-3xl p-8 sm:p-9 shadow-2xl border border-slate-100 text-slate-900 relative">
+            {/* Top Red & Navy Brand Stripe */}
+            <div className="absolute top-0 left-8 right-8 h-1.5 bg-gradient-to-r from-[#D71921] via-[#162874] to-[#D71921] rounded-b" />
+
+            <div className="space-y-6 pt-1">
+              {/* Card Brand Header */}
+              <div className="text-center space-y-3">
+                <div className="relative w-20 h-20 mx-auto drop-shadow-md">
+                  <Image
+                    src="/logo.png"
+                    alt="Escudo Oficial CBSJC"
+                    fill
+                    priority
+                    className="object-contain"
+                  />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-[#0E1B4D] tracking-tight">
+                    Acceso Institucional
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Ingresa con tu cuenta de correo para acceder a la base de conocimiento y generador curricular.
+                  </p>
+                </div>
+              </div>
+
+              {emailSent ? (
+                <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-3">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-600 mx-auto" />
+                  <h3 className="text-sm font-bold text-emerald-900">¡Enlace de acceso enviado!</h3>
+                  <p className="text-xs text-emerald-700 leading-relaxed">
+                    Hemos enviado un enlace mágico a <strong>{email}</strong>. Haz clic en el enlace de tu correo para ingresar directamente.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEmailSent(false)}
+                    className="text-xs mt-2 border-emerald-300 text-emerald-800"
+                  >
+                    Usar otro correo
+                  </Button>
+                </div>
               ) : (
-                <svg className="h-5 w-5" viewBox="0 0 24 24">
-                  <path
-                    fill="#EA4335"
-                    d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"
-                  />
-                  <path
-                    fill="#4285F4"
-                    d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.5.4-2.3L1.9 7.3C.7 9.7 0 12 0 14.8s.7 5.1 1.9 7.5l3.7-2.9z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23.5c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 17c1.8 3.7 5.6 6.5 10.1 6.5z"
-                  />
-                </svg>
-              )}
-              {loading ? 'Iniciando sesión...' : 'Continuar con Google Workspace'}
-            </Button>
+                <div className="space-y-4">
+                  {/* Google Workspace Button */}
+                  <Button
+                    onClick={handleGoogleLogin}
+                    disabled={isLoading}
+                    className="w-full h-12 bg-[#162874] hover:bg-[#0E1B4D] text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-3"
+                  >
+                    {isLoading ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <svg className="h-5 w-5 bg-white rounded-full p-0.5 shrink-0" viewBox="0 0 24 24">
+                          <path
+                            fill="#4285F4"
+                            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                          />
+                          <path
+                            fill="#34A853"
+                            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                          />
+                          <path
+                            fill="#FBBC05"
+                            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                          />
+                          <path
+                            fill="#EA4335"
+                            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                          />
+                        </svg>
+                        <span>Continuar con Google Workspace</span>
+                      </>
+                    )}
+                  </Button>
 
-            <div className="pt-2 border-t border-slate-100">
-              <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-500">
-                <div className="flex items-center gap-1.5">
-                  <FileCheck2 className="h-3.5 w-3.5 text-[#003087]" />
-                  <span>Planes de Área y Clase</span>
+                  <div className="relative flex items-center justify-center">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-slate-200" />
+                    </div>
+                    <span className="relative bg-white px-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                      o con correo institucional
+                    </span>
+                  </div>
+
+                  {/* Direct Institutional Email OTP Form */}
+                  <form onSubmit={handleEmailLogin} className="space-y-3">
+                    <div className="space-y-1">
+                      <div className="relative">
+                        <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input
+                          type="email"
+                          placeholder="tu.nombre@sanjosebilingue.edu.co"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          disabled={isLoading}
+                          required
+                          className="pl-10 h-11 text-xs border-slate-200 focus:border-[#162874] rounded-xl"
+                        />
+                      </div>
+                    </div>
+
+                    <Button
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full h-11 bg-[#D71921] hover:bg-[#B81219] text-white font-bold text-xs rounded-xl shadow-sm transition-colors"
+                    >
+                      {isLoading ? (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <span>Enviar enlace de acceso directo</span>
+                      )}
+                    </Button>
+                  </form>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-[#C8A84B]" />
-                  <span>IA Curricular Precisa</span>
+              )}
+
+              {/* Trust & Security Notes */}
+              <div className="pt-4 border-t border-slate-100 space-y-2">
+                <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                  <ShieldCheck className="h-4 w-4 text-[#D71921] shrink-0" />
+                  <span>Base de datos segura con autenticación Supabase</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <BookOpen className="h-3.5 w-3.5 text-[#003087]" />
-                  <span>Documentos Rectores</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                  <span>Seguridad Supabase</span>
+                <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>Modelos certificados con directrices del MEN</span>
                 </div>
               </div>
             </div>
-          </CardContent>
+          </div>
+        </div>
+      </main>
 
-          <CardFooter className="flex justify-center border-t border-slate-100 bg-slate-50/50 py-3 rounded-b-xl">
-            <p className="text-[11px] text-slate-500 text-center">
-              Exclusivo para la comunidad docente y directiva del CBSJC
-            </p>
-          </CardFooter>
-        </Card>
-      </div>
+      {/* Footer */}
+      <footer className="relative z-10 w-full max-w-7xl mx-auto px-6 py-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+        <p>© {new Date().getFullYear()} Colegio Bilingüe San José Campestre. Todos los derechos reservados.</p>
+        <p className="text-slate-400">
+          Sistema de Inteligencia Artificial Curricular RAG
+        </p>
+      </footer>
     </div>
   )
 }

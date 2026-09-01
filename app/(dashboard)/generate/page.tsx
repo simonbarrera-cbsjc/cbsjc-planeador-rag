@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -186,7 +186,7 @@ export default function GeneratePage() {
   return (
     <div className="space-y-8 max-w-5xl mx-auto">
       <div>
-        <h1 className="text-2xl font-black text-[#003087]">Generador Curricular Inteligente</h1>
+        <h1 className="text-2xl font-black text-[#0E1B4D]">Generador Curricular Inteligente</h1>
         <p className="text-sm text-slate-500 mt-1">
           Crea documentos pedagógicos e institucionales altamente estructurados a partir de los lineamientos del Colegio Bilingüe San José Campestre.
         </p>
@@ -195,10 +195,10 @@ export default function GeneratePage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Form Column (2 cols) */}
         <div className="lg:col-span-2">
-          <Card className="border-slate-200 shadow-md">
+          <Card className="border-slate-200 shadow-md rounded-2xl bg-white">
             <CardHeader>
-              <CardTitle className="text-base text-[#003087] flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-[#C8A84B]" />
+              <CardTitle className="text-base text-[#0E1B4D] font-bold flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-[#D71921]" />
                 Parámetros del Documento
               </CardTitle>
               <CardDescription>
@@ -221,7 +221,7 @@ export default function GeneratePage() {
                       }
                     }}
                   >
-                    <SelectTrigger id="docType" className="h-11">
+                    <SelectTrigger id="docType" className="h-11 rounded-xl">
                       <SelectValue placeholder="Selecciona el tipo de documento" />
                     </SelectTrigger>
                     <SelectContent>
@@ -243,6 +243,7 @@ export default function GeneratePage() {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     required
+                    className="rounded-xl"
                   />
                 </div>
 
@@ -251,7 +252,7 @@ export default function GeneratePage() {
                   <div className="space-y-1.5">
                     <Label htmlFor="language">Idioma de Salida *</Label>
                     <Select value={language} onValueChange={(val) => setLanguage(val as Language)}>
-                      <SelectTrigger id="language">
+                      <SelectTrigger id="language" className="rounded-xl">
                         <SelectValue placeholder="Idioma" />
                       </SelectTrigger>
                       <SelectContent>
@@ -264,7 +265,7 @@ export default function GeneratePage() {
                   <div className="space-y-1.5">
                     <Label htmlFor="nivel">Nivel Educativo *</Label>
                     <Select value={nivel} onValueChange={(val) => setNivel(val as DocumentCategory)}>
-                      <SelectTrigger id="nivel">
+                      <SelectTrigger id="nivel" className="rounded-xl">
                         <SelectValue placeholder="Nivel" />
                       </SelectTrigger>
                       <SelectContent>
@@ -283,7 +284,7 @@ export default function GeneratePage() {
                   <div className="space-y-1.5">
                     <Label htmlFor="area">Área *</Label>
                     <Select value={area} onValueChange={(val) => setArea(val as DocumentArea)}>
-                      <SelectTrigger id="area">
+                      <SelectTrigger id="area" className="rounded-xl">
                         <SelectValue placeholder="Área" />
                       </SelectTrigger>
                       <SelectContent>
@@ -299,7 +300,7 @@ export default function GeneratePage() {
                   <div className="space-y-1.5">
                     <Label htmlFor="grado">Grado</Label>
                     <Select value={grado} onValueChange={setGrado}>
-                      <SelectTrigger id="grado">
+                      <SelectTrigger id="grado" className="rounded-xl">
                         <SelectValue placeholder="Grado" />
                       </SelectTrigger>
                       <SelectContent>
@@ -315,7 +316,7 @@ export default function GeneratePage() {
                   <div className="space-y-1.5">
                     <Label htmlFor="periodo">Periodo</Label>
                     <Select value={periodo} onValueChange={(val) => setPeriodo(val as Periodo)}>
-                      <SelectTrigger id="periodo">
+                      <SelectTrigger id="periodo" className="rounded-xl">
                         <SelectValue placeholder="Periodo" />
                       </SelectTrigger>
                       <SelectContent>
@@ -341,6 +342,7 @@ export default function GeneratePage() {
                     placeholder="Ej: Enfatizar el uso de material concreto para el Momento de Exploración. Incluir actividades en parejas para la práctica guiada y rúbrica para evaluación formativa adaptada a DUA."
                     value={additionalInstructions}
                     onChange={(e) => setAdditionalInstructions(e.target.value)}
+                    className="rounded-xl"
                   />
                 </div>
 
@@ -348,7 +350,7 @@ export default function GeneratePage() {
                 <Button
                   type="submit"
                   disabled={isGenerating}
-                  className="w-full h-12 bg-[#003087] hover:bg-[#002060] text-white font-bold text-base shadow-md transition-all flex items-center justify-center gap-2"
+                  className="w-full h-12 bg-[#D71921] hover:bg-[#B81219] text-white font-bold text-base shadow-md transition-all flex items-center justify-center gap-2 rounded-xl"
                 >
                   {isGenerating ? (
                     <>
@@ -357,7 +359,7 @@ export default function GeneratePage() {
                     </>
                   ) : (
                     <>
-                      <Sparkles className="h-5 w-5 text-[#C8A84B]" />
+                      <Sparkles className="h-5 w-5" />
                       <span>Generar Documento con RAG</span>
                     </>
                   )}
@@ -370,10 +372,10 @@ export default function GeneratePage() {
         {/* Right Info Column (1 col) */}
         <div className="space-y-6">
           {/* Selected Document Info */}
-          <Card className="border-slate-200 shadow-sm bg-slate-50/50">
+          <Card className="border-slate-200 shadow-sm bg-slate-50/50 rounded-2xl">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-bold text-[#003087] flex items-center gap-2">
-                <FileCheck2 className="h-4 w-4 text-[#C8A84B]" />
+              <CardTitle className="text-sm font-bold text-[#0E1B4D] flex items-center gap-2">
+                <FileCheck2 className="h-4 w-4 text-[#D71921]" />
                 Estructura de Generación
               </CardTitle>
             </CardHeader>
@@ -400,11 +402,11 @@ export default function GeneratePage() {
           </Card>
 
           {/* Quick Help Card */}
-          <Card className="border-slate-200 shadow-sm bg-[#001D52] text-white">
+          <Card className="border-slate-200 shadow-sm bg-[#0E1B4D] text-white rounded-2xl">
             <CardContent className="p-5 space-y-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#C8A84B]">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#D71921]">
                 <Globe className="h-4 w-4" />
-                <span>Enfoque Bilingüe CBSJC</span>
+                <span className="text-white">Enfoque Bilingüe CBSJC</span>
               </div>
               <p className="text-xs text-slate-200 leading-relaxed">
                 Si seleccionas idioma <strong>English</strong>, el sistema generará los planes y vocabulario en inglés de acuerdo con los estándares internacionales del colegio.

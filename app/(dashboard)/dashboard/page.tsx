@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,8 @@ import {
   CheckCircle2,
   ArrowRight,
   Calendar,
+  Layers,
+  GraduationCap,
 } from 'lucide-react'
 import { formatDate, formatDocumentType, formatArea } from '@/lib/utils'
 import type { SourceDocument, GeneratedDocument } from '@/types'
@@ -42,29 +45,46 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header Banner */}
-      <div className="rounded-2xl bg-gradient-to-r from-[#001D52] via-[#003087] to-[#004ab3] text-white p-6 sm:p-8 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div className="space-y-2 max-w-2xl">
-          <Badge variant="gold" className="text-xs px-3 py-1 font-semibold uppercase tracking-wider">
-            Colegio Bilingüe San José Campestre
-          </Badge>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-            Sistema de Planeación Curricular y Generación RAG
+      {/* Institutional Hero Banner */}
+      <div className="rounded-3xl bg-gradient-to-r from-[#0E1B4D] via-[#162874] to-[#0A1435] text-white p-6 sm:p-8 shadow-xl border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
+        {/* Glow */}
+        <div className="absolute -right-20 -top-20 w-80 h-80 bg-[#D71921]/20 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="space-y-3 max-w-2xl relative z-10">
+          <div className="flex items-center gap-3">
+            <div className="relative w-9 h-9 drop-shadow">
+              <Image
+                src="/logo.png"
+                alt="Escudo CBSJC"
+                fill
+                className="object-contain"
+              />
+            </div>
+            <div>
+              <span className="text-[11px] font-serif text-slate-300 block">Colegio bilingüe</span>
+              <span className="text-xs font-black uppercase tracking-wider text-white">
+                <span className="text-[#D71921]">San José</span> Campestre
+              </span>
+            </div>
+          </div>
+
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+            Sistema de Planeación Curricular & RAG
           </h1>
-          <p className="text-slate-200 text-sm leading-relaxed">
-            Genera planeadores de clase, planes de área, informes y circulares alineados con los documentos rectores y DBA del colegio.
+          <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
+            Genera planeadores de clase, planes de área e informes pedagógicos alineados en tiempo real con los documentos rectores del colegio.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-3 shrink-0">
+        <div className="flex flex-wrap gap-3 shrink-0 relative z-10">
           <Link href="/generate">
-            <Button className="bg-[#C8A84B] hover:bg-[#dfc06a] text-slate-950 font-bold shadow-md h-11 px-5 flex items-center gap-2">
+            <Button className="bg-[#D71921] hover:bg-[#B81219] text-white font-bold shadow-lg h-11 px-5 rounded-xl flex items-center gap-2 transition-transform hover:scale-[1.02]">
               <Sparkles className="h-4 w-4" />
               <span>Generar Documento</span>
             </Button>
           </Link>
           <Link href="/upload">
-            <Button variant="outline" className="bg-white/10 hover:bg-white/20 text-white border-white/20 h-11 px-5 flex items-center gap-2">
+            <Button variant="outline" className="bg-white/10 hover:bg-white/20 text-white border-white/20 h-11 px-5 rounded-xl flex items-center gap-2 backdrop-blur-md">
               <UploadCloud className="h-4 w-4" />
               <span>Subir Rector</span>
             </Button>
@@ -74,12 +94,14 @@ export default async function DashboardPage() {
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Docs Rectores
+            <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Documentos Rectores
             </CardTitle>
-            <BookOpen className="h-5 w-5 text-[#003087]" />
+            <div className="w-8 h-8 rounded-lg bg-[#162874]/10 flex items-center justify-center text-[#162874]">
+              <BookOpen className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-black text-slate-900">{totalSourceDocs}</div>
@@ -89,12 +111,14 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Fragmentos Vectorizados
+            <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Fragmentos RAG
             </CardTitle>
-            <Sparkles className="h-5 w-5 text-[#C8A84B]" />
+            <div className="w-8 h-8 rounded-lg bg-[#D71921]/10 flex items-center justify-center text-[#D71921]">
+              <Sparkles className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-black text-slate-900">{totalChunks}</div>
@@ -104,27 +128,31 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Documentos Generados
+            <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Documentos Creados
             </CardTitle>
-            <FileText className="h-5 w-5 text-emerald-600" />
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+              <FileText className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-black text-slate-900">{totalGenerated}</div>
             <p className="text-xs text-slate-500 mt-1">
-              Disponibles para edición y exportación
+              Disponibles para editar y exportar
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Estado del Motor RAG
+            <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Motor Curricular
             </CardTitle>
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+              <CheckCircle2 className="h-4 w-4" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-sm font-bold text-emerald-700 flex items-center gap-1.5">
@@ -132,48 +160,48 @@ export default async function DashboardPage() {
               Gemini 2.0 Flash Activo
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Google AI Studio Conectado
+              Google AI Studio & Supabase OK
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Sections Grid */}
+      {/* Main Grid: Recent Documents + Knowledge Base */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Generated Documents (2 cols) */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-[#003087]">Últimos Documentos Generados</h2>
-              <p className="text-xs text-slate-500">Documentos listos para ver, editar o exportar</p>
+              <h2 className="text-lg font-black text-[#0E1B4D]">Últimos Documentos Generados</h2>
+              <p className="text-xs text-slate-500">Documentos institucionales listos para abrir, editar o exportar</p>
             </div>
-            <Link href="/history" className="text-xs font-semibold text-[#003087] hover:underline flex items-center gap-1">
+            <Link href="/history" className="text-xs font-bold text-[#162874] hover:text-[#D71921] flex items-center gap-1 transition-colors">
               Ver todos ({totalGenerated})
               <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
 
-          <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <Card className="border-slate-200 shadow-sm overflow-hidden rounded-2xl bg-white">
             {generatedDocs && generatedDocs.length > 0 ? (
               <div className="divide-y divide-slate-100">
                 {generatedDocs.map((doc) => (
                   <div
                     key={doc.id}
-                    className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-slate-50/80 transition-colors"
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-slate-50/80 transition-colors"
                   >
-                    <div className="space-y-1 min-w-0">
+                    <div className="space-y-1.5 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="default" className="text-[10px] bg-[#003087]">
+                        <Badge className="text-[10px] bg-[#162874] text-white">
                           {formatDocumentType(doc.document_type)}
                         </Badge>
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge variant="outline" className="text-[10px] border-slate-300 text-slate-700">
                           {formatArea(doc.area)}
                         </Badge>
-                        <Badge variant="secondary" className="text-[10px] uppercase font-bold">
+                        <Badge variant="secondary" className="text-[10px] uppercase font-bold text-[#D71921] bg-red-50">
                           {doc.language}
                         </Badge>
                       </div>
-                      <h3 className="text-sm font-bold text-slate-800 truncate">
+                      <h3 className="text-sm font-bold text-slate-900 truncate">
                         {doc.title}
                       </h3>
                       <div className="flex items-center gap-3 text-xs text-slate-500">
@@ -187,7 +215,7 @@ export default async function DashboardPage() {
                     </div>
 
                     <Link href={`/preview/${doc.id}`} className="shrink-0">
-                      <Button size="sm" variant="outline" className="text-xs font-semibold border-slate-300">
+                      <Button size="sm" variant="outline" className="text-xs font-bold border-[#162874]/30 hover:bg-[#162874] hover:text-white rounded-xl transition-colors">
                         Abrir y Editar
                       </Button>
                     </Link>
@@ -195,14 +223,14 @@ export default async function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="p-8 text-center space-y-3">
+              <div className="p-10 text-center space-y-3">
                 <FileText className="h-10 w-10 text-slate-300 mx-auto" />
                 <div>
-                  <p className="text-sm font-semibold text-slate-700">Aún no has generado ningún documento</p>
+                  <p className="text-sm font-bold text-slate-800">Aún no has generado ningún documento</p>
                   <p className="text-xs text-slate-500">Crea tu primer planeador de clase o plan de área en segundos.</p>
                 </div>
                 <Link href="/generate">
-                  <Button size="sm" className="bg-[#003087] text-white">
+                  <Button size="sm" className="bg-[#D71921] hover:bg-[#B81219] text-white font-bold rounded-xl mt-1">
                     Crear primer documento
                   </Button>
                 </Link>
@@ -215,23 +243,23 @@ export default async function DashboardPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-[#003087]">Base de Conocimiento</h2>
+              <h2 className="text-lg font-black text-[#0E1B4D]">Base de Conocimiento</h2>
               <p className="text-xs text-slate-500">Documentos rectores que alimentan el RAG</p>
             </div>
-            <Link href="/upload" className="text-xs font-semibold text-[#003087] hover:underline flex items-center gap-1">
+            <Link href="/upload" className="text-xs font-bold text-[#162874] hover:text-[#D71921] flex items-center gap-1 transition-colors">
               Subir más
               <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
 
-          <Card className="border-slate-200 shadow-sm">
+          <Card className="border-slate-200 shadow-sm rounded-2xl bg-white">
             <CardContent className="p-4 space-y-3">
               {sourceDocs && sourceDocs.length > 0 ? (
                 <div className="space-y-2.5">
                   {sourceDocs.slice(0, 5).map((doc) => (
                     <div
                       key={doc.id}
-                      className="p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2"
+                      className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2 hover:bg-slate-50 transition-colors"
                     >
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-800 truncate">{doc.title}</p>
@@ -240,14 +268,13 @@ export default async function DashboardPage() {
                         </p>
                       </div>
                       <Badge
-                        variant={
+                        className={`text-[10px] shrink-0 font-bold ${
                           doc.status === 'ready'
-                            ? 'success'
+                            ? 'bg-emerald-100 text-emerald-800'
                             : doc.status === 'processing'
-                            ? 'warning'
-                            : 'destructive'
-                        }
-                        className="text-[10px] shrink-0 capitalize"
+                            ? 'bg-sky-100 text-sky-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
                       >
                         {doc.status === 'ready' ? 'Listo' : doc.status}
                       </Badge>
@@ -255,11 +282,11 @@ export default async function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <div className="py-6 text-center space-y-2">
+                <div className="py-8 text-center space-y-2">
                   <UploadCloud className="h-8 w-8 text-slate-300 mx-auto" />
-                  <p className="text-xs text-slate-600">No hay documentos rectores subidos todavía.</p>
+                  <p className="text-xs text-slate-600 font-medium">No hay documentos rectores subidos todavía.</p>
                   <Link href="/upload">
-                    <Button size="sm" variant="outline" className="text-xs mt-2">
+                    <Button size="sm" variant="outline" className="text-xs font-bold rounded-xl mt-2 border-slate-300">
                       Subir documento rector (PDF)
                     </Button>
                   </Link>
