@@ -46,7 +46,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  serverExternalPackages: ['pdf-parse', '@react-pdf/renderer', 'mammoth'],
+  serverExternalPackages: ['pdf-parse', '@react-pdf/renderer', 'mammoth', 'tesseract.js'],
   async headers() {
     return [
       {
