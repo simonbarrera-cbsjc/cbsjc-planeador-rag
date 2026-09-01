@@ -2,20 +2,21 @@
  * @file app/api/generate/route.ts
  * @description POST /api/generate
  *
- * Accepts generation parameters, retrieves semantically relevant chunks
- * from the vector store, calls the LLM generator (Gemini 2.0 Flash),
- * persists the result, and returns the generated document.
+ * Accepts multipart/form-data with:
+ * - 3 Mandatory files: plan_de_area, siap, cuadernillo (PDF, Word .docx, Markdown .md)
+ * - Optional additional files (e.g. PRAE, departmental guides)
+ * - Pedagogical metadata: docente, area, grado, periodo, semanas, tema, additionalInstructions
  *
- * Auth: Supabase session required.
+ * Extracts text dynamically (with OCR fallback for scanned PDFs), calls Gemini 2.0 Flash
+ * with the official SJB-RGA006 Planning Book prompt, generates the 3 deliverables,
+ * persists the document, and returns the result.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
-
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { retrieveRelevantChunks } from '@/lib/ai/retrieval'
-import { generateDocument } from '@/lib/ai/generator'
+import { generatePlanningDocument } from '@/lib/ai/generator'
+import { extractTextFromFile } from '@/lib/ai/file-extractor'
 import {
   rateLimit,
   RATE_LIMIT_PRESETS,
@@ -23,54 +24,9 @@ import {
   addRateLimitHeaders,
 } from '@/lib/security/rate-limit'
 
-// ---------------------------------------------------------------------------
-// Validation schema
-// ---------------------------------------------------------------------------
-
-const DOCUMENT_TYPES = [
-  'planeador',
-  'plan_area',
-  'informe',
-  'circular',
-  'proyecto_pedagogico',
-] as const
-
-const DOCUMENT_CATEGORIES = [
-  'primaria',
-  'secundaria',
-  'bachillerato',
-  'general',
-] as const
-
-const DOCUMENT_AREAS = [
-  'matematicas',
-  'ciencias',
-  'humanidades',
-  'ingles',
-  'sociales',
-  'artes',
-  'educacion_fisica',
-  'tecnologia',
-  'religion',
-  'general',
-] as const
-
-const PERIODOS = ['I', 'II', 'III', 'IV'] as const
-const LANGUAGES = ['es', 'en'] as const
-
-const generateBodySchema = z.object({
-  documentType: z.enum(DOCUMENT_TYPES),
-  language: z.enum(LANGUAGES),
-  nivel: z.enum(DOCUMENT_CATEGORIES),
-  area: z.enum(DOCUMENT_AREAS),
-  grado: z.string().max(50).trim().optional(),
-  periodo: z.enum(PERIODOS).optional(),
-  additionalInstructions: z.string().max(3000).trim().optional(),
-  title: z.string().min(1, 'El título es obligatorio').max(300, 'El título no puede exceder 300 caracteres').trim(),
-})
+export const maxDuration = 60 // 60 seconds timeout for heavy OCR / generation
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // 1. Authenticate
   const supabase = await createClient()
   const {
     data: { user },
@@ -81,126 +37,156 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
   }
 
-  // 2. Rate limit check (10 requests/minute per authenticated user or IP)
+  // Rate limit check
   const rateLimitResult = rateLimit(request, RATE_LIMIT_PRESETS.generate, user.id)
   if (!rateLimitResult.success) {
     return createRateLimitResponse(
       rateLimitResult,
-      `Has excedido el límite de generación (${RATE_LIMIT_PRESETS.generate.limit} solicitudes por minuto). Por favor espera ${rateLimitResult.retryAfterSeconds} segundos antes de intentar nuevamente.`
+      `Has excedido el límite de generación (${RATE_LIMIT_PRESETS.generate.limit} por minuto). Por favor espera ${rateLimitResult.retryAfterSeconds} segundos.`
     )
   }
 
-  // 3. Parse + validate body
-  let body: unknown
+  let formData: FormData
   try {
-    body = await request.json()
+    formData = await request.formData()
   } catch {
-    return NextResponse.json({ success: false, error: 'JSON inválido' }, { status: 400 })
+    return NextResponse.json({ success: false, error: 'FormData inválido o malformado' }, { status: 400 })
   }
 
-  const parsed = generateBodySchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json(
-      { success: false, error: parsed.error.flatten().fieldErrors },
-      { status: 400 }
-    )
+  const docente = String(formData.get('docente') || formData.get('author') || '').trim()
+  const area = String(formData.get('area') || 'general').trim()
+  const grado = String(formData.get('grado') || '').trim()
+  const periodo = String(formData.get('periodo') || 'I').trim()
+  const semanas = String(formData.get('semanas') || '4 semanas (sesiones de 90 min)').trim()
+  const tema = String(formData.get('tema') || formData.get('title') || 'Secuencia Didáctica').trim()
+  const additionalInstructions = String(formData.get('additionalInstructions') || formData.get('instrucciones') || '').trim()
+
+  if (!docente) {
+    return NextResponse.json({ success: false, error: 'El nombre del docente es requerido' }, { status: 400 })
+  }
+  if (!tema) {
+    return NextResponse.json({ success: false, error: 'El tema o título de la secuencia es requerido' }, { status: 400 })
   }
 
-  const params = parsed.data
+  // Extract uploaded files
+  const planDeAreaFile = formData.get('plan_de_area') as File | null
+  const siapFile = formData.get('siap') as File | null
+  const cuadernilloFile = formData.get('cuadernillo') as File | null
+  const adicionalesFiles = formData.getAll('adicionales') as File[]
 
-  // 4. Build a comprehensive search query for RAG retrieval
-  const searchQuery = [
-    params.title,
-    params.documentType,
-    params.area,
-    params.nivel,
-    params.grado,
-    params.periodo ? `Periodo ${params.periodo}` : null,
-    params.additionalInstructions,
-  ]
-    .filter(Boolean)
-    .join(' ')
+  if (!planDeAreaFile || !(planDeAreaFile instanceof File)) {
+    return NextResponse.json({ success: false, error: 'El documento Plan de Área es obligatorio' }, { status: 400 })
+  }
+  if (!siapFile || !(siapFile instanceof File)) {
+    return NextResponse.json({ success: false, error: 'El documento SIAP es obligatorio' }, { status: 400 })
+  }
+  if (!cuadernilloFile || !(cuadernilloFile instanceof File)) {
+    return NextResponse.json({ success: false, error: 'El documento Cuadernillo es obligatorio' }, { status: 400 })
+  }
 
-  // 5. Retrieve relevant chunks with area + category filters
-  let contextChunks: Array<{ content: string; similarity: number }> = []
   try {
-    const matched = await retrieveRelevantChunks(searchQuery, {
-      filterArea: params.area,
-      filterCategory: params.nivel,
-      matchCount: 10,
-      matchThreshold: 0.5,
-    })
-    contextChunks = (matched || []).map((m) => ({
-      content: m.content,
-      similarity: m.similarity,
-    }))
-  } catch (err) {
-    console.warn('[POST /api/generate] Semantic retrieval note:', err)
-    // Fallback: Proceed with general curricular knowledge
-    contextChunks = []
-  }
+    // 1. Extract text from all files in parallel
+    const [planDeAreaRes, siapRes, cuadernilloRes] = await Promise.all([
+      planDeAreaFile.arrayBuffer().then((buf) => extractTextFromFile(Buffer.from(buf), planDeAreaFile.name)),
+      siapFile.arrayBuffer().then((buf) => extractTextFromFile(Buffer.from(buf), siapFile.name)),
+      cuadernilloFile.arrayBuffer().then((buf) => extractTextFromFile(Buffer.from(buf), cuadernilloFile.name)),
+    ])
 
-  // 6. Generate document via Gemini 2.0 Flash
-  let generatedContent: string
-  try {
-    generatedContent = await generateDocument({
-      documentType: params.documentType,
-      language: params.language,
-      nivel: params.nivel,
-      area: params.area,
-      grado: params.grado,
-      periodo: params.periodo,
-      additionalInstructions: params.additionalInstructions,
-      title: params.title,
-      contextChunks,
+    const contextDocs: Array<{
+      tipo: 'plan_de_area' | 'siap' | 'cuadernillo' | 'adicional'
+      filename: string
+      content: string
+    }> = [
+      { tipo: 'plan_de_area', filename: planDeAreaFile.name, content: planDeAreaRes.text },
+      { tipo: 'siap', filename: siapFile.name, content: siapRes.text },
+      { tipo: 'cuadernillo', filename: cuadernilloFile.name, content: cuadernilloRes.text },
+    ]
+
+    // Process additional files if present
+    for (const addFile of adicionalesFiles) {
+      if (addFile instanceof File && addFile.size > 0) {
+        const buf = await addFile.arrayBuffer()
+        const extRes = await extractTextFromFile(Buffer.from(buf), addFile.name)
+        contextDocs.push({
+          tipo: 'adicional',
+          filename: addFile.name,
+          content: extRes.text,
+        })
+      }
+    }
+
+    // 2. Call AI Generator for official SJB-RGA006 Planning Book
+    const generated = await generatePlanningDocument({
+      docente,
+      area,
+      grado,
+      periodo,
+      semanas,
+      tema,
+      additionalInstructions,
+      language: 'es',
+      contextDocs,
     })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Error durante la llamada a IA'
-    console.error('[POST /api/generate] Generator error:', message)
-    return NextResponse.json(
-      { success: false, error: `Error generando documento: ${message}` },
-      { status: 500 }
+
+    // Store metadata & structured output as JSON inside content / additional_instructions
+    const combinedPayload = JSON.stringify({
+      planningBookMarkdown: generated.planningBookMarkdown,
+      rubricsMarkdown: generated.rubricsMarkdown,
+      cibercolegiosSnippet: generated.cibercolegiosSnippet,
+      excelSpec: generated.excelSpec,
+      metadata: {
+        docente,
+        area,
+        grado,
+        periodo,
+        semanas,
+        tema,
+        files: contextDocs.map((d) => ({ tipo: d.tipo, name: d.filename })),
+      },
+    })
+
+    // 3. Save to generated_documents table in Supabase
+    const { data: savedDoc, error: insertError } = await supabaseAdmin
+      .from('generated_documents')
+      .insert({
+        user_id: user.id,
+        title: `Secuencia Didáctica: ${tema} (${grado || area})`,
+        document_type: 'planeador',
+        nivel: 'general',
+        area: area as any,
+        grado: grado || null,
+        periodo: periodo as any,
+        content: combinedPayload,
+        additional_instructions: additionalInstructions || null,
+        sources_used: contextDocs.length,
+        status: 'generated',
+        language: 'es',
+      })
+      .select('id')
+      .single()
+
+    if (insertError || !savedDoc) {
+      console.error('[POST /api/generate] DB insert error:', insertError?.message)
+      return NextResponse.json(
+        { success: false, error: 'No se pudo registrar la planeación en la base de datos' },
+        { status: 500 }
+      )
+    }
+
+    const successResponse = NextResponse.json(
+      {
+        success: true,
+        documentId: savedDoc.id,
+        title: tema,
+        sourcesUsed: contextDocs.length,
+      },
+      { status: 201 }
     )
+
+    return addRateLimitHeaders(successResponse, rateLimitResult)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Error desconocido en la generación'
+    console.error('[POST /api/generate] Execution error:', msg)
+    return NextResponse.json({ success: false, error: msg }, { status: 500 })
   }
-
-  // 7. Persist the generated document to Supabase
-  const { data: savedDoc, error: insertError } = await supabaseAdmin
-    .from('generated_documents')
-    .insert({
-      user_id: user.id,
-      title: params.title,
-      document_type: params.documentType,
-      nivel: params.nivel,
-      area: params.area,
-      grado: params.grado || null,
-      periodo: params.periodo || null,
-      content: generatedContent,
-      additional_instructions: params.additionalInstructions || null,
-      sources_used: contextChunks.length,
-      status: 'generated',
-      language: params.language,
-    })
-    .select('id')
-    .single()
-
-  if (insertError || !savedDoc) {
-    console.error('[POST /api/generate] DB insert error:', insertError?.message)
-    return NextResponse.json(
-      { success: false, error: 'No se pudo guardar el documento generado en la base de datos' },
-      { status: 500 }
-    )
-  }
-
-  // 8. Return success with rate limit headers
-  const successResponse = NextResponse.json(
-    {
-      success: true,
-      documentId: savedDoc.id,
-      content: generatedContent,
-      sourcesUsed: contextChunks.length,
-    },
-    { status: 200 }
-  )
-
-  return addRateLimitHeaders(successResponse, rateLimitResult)
 }

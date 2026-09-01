@@ -2,12 +2,12 @@
  * @file app/api/export/route.ts
  * @description POST /api/export
  *
- * Exports a generated document to PDF, DOCX, or Google Docs.
- * - PDF/DOCX: uploaded to Supabase Storage `generated-exports` bucket,
- *   returns a signed URL with a 1-hour expiry.
- * - Google Docs: calls createGoogleDoc, returns the public gdocs URL.
- *
- * Auth: Supabase session required. Document must belong to the authenticated user.
+ * Exports generated deliverables:
+ * - 'pdf': Planning Book in PDF
+ * - 'docx': Planning Book in Word .docx
+ * - 'rubrics_docx': Rubrics in Word .docx
+ * - 'excel': Grade Spreadsheet in Excel .xlsx
+ * - 'zip': All deliverables bundled in a single ZIP file
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -17,9 +17,9 @@ import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { generatePdf } from '@/lib/export/pdf'
 import { generateDocx } from '@/lib/export/docx'
-import { createGoogleDoc } from '@/lib/export/gdocs'
+import { generateGradeSpreadsheet } from '@/lib/export/excel'
+import { createDeliverablesZip } from '@/lib/export/zip'
 import { formatDate } from '@/lib/utils'
-import type { GeneratedDocumentStatus } from '@/types'
 import {
   rateLimit,
   RATE_LIMIT_PRESETS,
@@ -32,7 +32,7 @@ const SIGNED_URL_EXPIRY_SECONDS = 3600 // 1 hour
 
 const exportBodySchema = z.object({
   documentId: z.string().uuid('documentId must be a valid UUID'),
-  format: z.enum(['pdf', 'docx', 'gdocs']),
+  format: z.enum(['pdf', 'docx', 'rubrics_docx', 'excel', 'zip', 'gdocs']),
 })
 
 async function uploadAndSign(
@@ -40,7 +40,6 @@ async function uploadAndSign(
   buffer: Buffer,
   contentType: string
 ): Promise<{ path: string; signedUrl: string }> {
-  // Ensure bucket exists / upload
   const { error: uploadError } = await supabaseAdmin.storage
     .from(EXPORTS_BUCKET)
     .upload(storagePath, buffer, {
@@ -74,12 +73,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
   }
 
-  // Rate limit check (20 requests/minute per authenticated user or IP)
   const rateLimitResult = rateLimit(request, RATE_LIMIT_PRESETS.export, user.id)
   if (!rateLimitResult.success) {
     return createRateLimitResponse(
       rateLimitResult,
-      `Has excedido el límite de exportación (${RATE_LIMIT_PRESETS.export.limit} solicitudes por minuto). Por favor espera ${rateLimitResult.retryAfterSeconds} segundos.`
+      `Has excedido el límite de exportación. Por favor espera ${rateLimitResult.retryAfterSeconds} segundos.`
     )
   }
 
@@ -117,12 +115,37 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const authorName = profile?.full_name || user.email?.split('@')[0] || 'Docente CBSJC'
   const formattedDate = formatDate(doc.created_at, doc.language as 'es' | 'en')
 
+  // Parse structured payload if stored as JSON
+  let planningMarkdown = doc.content
+  let rubricsMarkdown = doc.content
+  let excelSpec = {
+    docente: authorName,
+    area: doc.area || 'General',
+    grado: doc.grado || 'Primaria/Secundaria',
+    periodo: String(doc.periodo || 'I'),
+    tema: doc.title,
+  }
+
   try {
+    const parsedPayload = JSON.parse(doc.content)
+    if (parsedPayload.planningBookMarkdown) {
+      planningMarkdown = parsedPayload.planningBookMarkdown
+      rubricsMarkdown = parsedPayload.rubricsMarkdown || parsedPayload.planningBookMarkdown
+      excelSpec = parsedPayload.excelSpec || excelSpec
+    }
+  } catch {
+    // legacy plain markdown format
+  }
+
+  const safeTitle = doc.title.toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 50)
+
+  try {
+    // 1. PDF Export
     if (format === 'pdf') {
       const pdfBuffer = await generatePdf({
         title: doc.title,
-        content: doc.content,
-        documentType: doc.document_type,
+        content: planningMarkdown,
+        documentType: 'planeador',
         language: doc.language as 'es' | 'en',
         metadata: {
           area: doc.area,
@@ -134,27 +157,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         },
       })
 
-      const safeTitle = doc.title.toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 50)
-      const storagePath = `${user.id}/${documentId}/${safeTitle}.pdf`
-      const { path, signedUrl } = await uploadAndSign(storagePath, pdfBuffer, 'application/pdf')
-
-      await supabaseAdmin
-        .from('generated_documents')
-        .update({
-          status: 'exported_pdf' satisfies GeneratedDocumentStatus,
-          pdf_storage_path: path,
-        })
-        .eq('id', documentId)
-
-      const response = NextResponse.json({ success: true, downloadUrl: signedUrl }, { status: 200 })
-      return addRateLimitHeaders(response, rateLimitResult)
+      const storagePath = `${user.id}/${documentId}/${safeTitle}-planning.pdf`
+      const { signedUrl } = await uploadAndSign(storagePath, pdfBuffer, 'application/pdf')
+      return NextResponse.json({ success: true, downloadUrl: signedUrl })
     }
 
+    // 2. Word .docx Export (Planning Book)
     if (format === 'docx') {
       const docxBuffer = await generateDocx({
         title: doc.title,
-        content: doc.content,
-        documentType: doc.document_type,
+        content: planningMarkdown,
+        documentType: 'planeador',
         language: doc.language as 'es' | 'en',
         metadata: {
           area: doc.area,
@@ -166,43 +179,104 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         },
       })
 
-      const safeTitle = doc.title.toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 50)
-      const storagePath = `${user.id}/${documentId}/${safeTitle}.docx`
-      const { path, signedUrl } = await uploadAndSign(
+      const storagePath = `${user.id}/${documentId}/${safeTitle}-planning.docx`
+      const { signedUrl } = await uploadAndSign(
         storagePath,
         docxBuffer,
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       )
-
-      await supabaseAdmin
-        .from('generated_documents')
-        .update({
-          status: 'exported_docx' satisfies GeneratedDocumentStatus,
-          docx_storage_path: path,
-        })
-        .eq('id', documentId)
-
-      const response = NextResponse.json({ success: true, downloadUrl: signedUrl }, { status: 200 })
-      return addRateLimitHeaders(response, rateLimitResult)
+      return NextResponse.json({ success: true, downloadUrl: signedUrl })
     }
 
-    if (format === 'gdocs') {
-      const { docUrl } = await createGoogleDoc({
-        title: doc.title,
-        content: doc.content,
-        userEmail: user.email || undefined,
+    // 3. Rubrics Word .docx Export
+    if (format === 'rubrics_docx') {
+      const rubricsDocxBuffer = await generateDocx({
+        title: `Rúbricas Evaluativas: ${doc.title}`,
+        content: rubricsMarkdown,
+        documentType: 'planeador',
+        language: doc.language as 'es' | 'en',
+        metadata: {
+          area: doc.area,
+          nivel: doc.nivel,
+          grado: doc.grado || undefined,
+          periodo: doc.periodo || undefined,
+          date: formattedDate,
+          authorName,
+        },
       })
 
-      await supabaseAdmin
-        .from('generated_documents')
-        .update({
-          status: 'exported_gdocs' satisfies GeneratedDocumentStatus,
-          gdocs_url: docUrl,
-        })
-        .eq('id', documentId)
+      const storagePath = `${user.id}/${documentId}/${safeTitle}-rubricas.docx`
+      const { signedUrl } = await uploadAndSign(
+        storagePath,
+        rubricsDocxBuffer,
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      )
+      return NextResponse.json({ success: true, downloadUrl: signedUrl })
+    }
 
-      const response = NextResponse.json({ success: true, gdocsUrl: docUrl }, { status: 200 })
-      return addRateLimitHeaders(response, rateLimitResult)
+    // 4. Excel .xlsx Grade Spreadsheet
+    if (format === 'excel') {
+      const excelBuffer = await generateGradeSpreadsheet({
+        docente: excelSpec.docente,
+        area: excelSpec.area,
+        grado: excelSpec.grado,
+        periodo: excelSpec.periodo,
+        tema: excelSpec.tema,
+      })
+
+      const storagePath = `${user.id}/${documentId}/${safeTitle}-planilla.xlsx`
+      const { signedUrl } = await uploadAndSign(
+        storagePath,
+        excelBuffer,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      )
+      return NextResponse.json({ success: true, downloadUrl: signedUrl })
+    }
+
+    // 5. Complete ZIP Package with all 3 Deliverables
+    if (format === 'zip') {
+      const [planningDocxBuf, planningPdfBuf, rubricsDocxBuf, excelBuf] = await Promise.all([
+        generateDocx({
+          title: doc.title,
+          content: planningMarkdown,
+          documentType: 'planeador',
+          language: doc.language as 'es' | 'en',
+          metadata: { area: doc.area, nivel: doc.nivel, grado: doc.grado || undefined, periodo: doc.periodo || undefined, date: formattedDate, authorName },
+        }),
+        generatePdf({
+          title: doc.title,
+          content: planningMarkdown,
+          documentType: 'planeador',
+          language: doc.language as 'es' | 'en',
+          metadata: { area: doc.area, nivel: doc.nivel, grado: doc.grado || undefined, periodo: doc.periodo || undefined, date: formattedDate, authorName },
+        }),
+        generateDocx({
+          title: `Rúbricas: ${doc.title}`,
+          content: rubricsMarkdown,
+          documentType: 'planeador',
+          language: doc.language as 'es' | 'en',
+          metadata: { area: doc.area, nivel: doc.nivel, grado: doc.grado || undefined, periodo: doc.periodo || undefined, date: formattedDate, authorName },
+        }),
+        generateGradeSpreadsheet({
+          docente: excelSpec.docente,
+          area: excelSpec.area,
+          grado: excelSpec.grado,
+          periodo: excelSpec.periodo,
+          tema: excelSpec.tema,
+        }),
+      ])
+
+      const zipBuffer = await createDeliverablesZip({
+        title: doc.title,
+        planningDocx: planningDocxBuf,
+        planningPdf: planningPdfBuf,
+        rubricsDocx: rubricsDocxBuf,
+        excelSpreadsheet: excelBuf,
+      })
+
+      const storagePath = `${user.id}/${documentId}/${safeTitle}-paquete-completo.zip`
+      const { signedUrl } = await uploadAndSign(storagePath, zipBuffer, 'application/zip')
+      return NextResponse.json({ success: true, downloadUrl: signedUrl })
     }
 
     return NextResponse.json({ success: false, error: 'Formato no soportado' }, { status: 400 })

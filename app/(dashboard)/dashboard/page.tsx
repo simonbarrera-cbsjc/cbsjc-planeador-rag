@@ -6,28 +6,21 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   Sparkles,
-  UploadCloud,
   FileText,
   BookOpen,
   CheckCircle2,
   ArrowRight,
   Calendar,
-  Layers,
+  History,
   GraduationCap,
+  FileSpreadsheet,
+  TableProperties,
 } from 'lucide-react'
-import { formatDate, formatDocumentType, formatArea } from '@/lib/utils'
-import type { SourceDocument, GeneratedDocument } from '@/types'
+import { formatDate, formatArea } from '@/lib/utils'
+import type { GeneratedDocument } from '@/types'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-
-  // Fetch count of source documents
-  const { data: sourceDocsData } = await supabase
-    .from('source_documents')
-    .select('id, title, category, area, status, created_at, chunk_count')
-    .order('created_at', { ascending: false })
-
-  const sourceDocs = (sourceDocsData || []) as SourceDocument[]
 
   // Fetch user's generated documents
   const { data: generatedDocsData } = await supabase
@@ -37,11 +30,7 @@ export default async function DashboardPage() {
     .limit(5)
 
   const generatedDocs = (generatedDocsData || []) as GeneratedDocument[]
-
-  const totalSourceDocs = sourceDocs.length
-  const readySourceDocs = sourceDocs.filter((d) => d.status === 'ready').length
   const totalGenerated = generatedDocs.length
-  const totalChunks = sourceDocs.reduce((acc, curr) => acc + (curr.chunk_count || 0), 0)
 
   return (
     <div className="space-y-8">
@@ -69,10 +58,10 @@ export default async function DashboardPage() {
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-            Sistema de Planeación Curricular & RAG
+            Sistema Oficial de Planeación Curricular & RAG
           </h1>
           <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
-            Genera planeadores de clase, planes de área e informes pedagógicos alineados en tiempo real con los documentos rectores del colegio.
+            Genera en un único paso la secuencia didáctica <strong>Planning Book (SJB-RGA006)</strong>, las <strong>Rúbricas Evaluativas</strong> y la <strong>Planilla de Notas en Excel (.xlsx)</strong> a partir del Plan de Área, SIAP y Cuadernillo.
           </p>
         </div>
 
@@ -80,221 +69,126 @@ export default async function DashboardPage() {
           <Link href="/generate">
             <Button className="bg-[#D71921] hover:bg-[#B81219] text-white font-bold shadow-lg h-11 px-5 rounded-xl flex items-center gap-2 transition-transform hover:scale-[1.02]">
               <Sparkles className="h-4 w-4" />
-              <span>Generar Documento</span>
+              <span>Generar Planeación</span>
             </Button>
           </Link>
-          <Link href="/upload">
+          <Link href="/history">
             <Button variant="outline" className="bg-white/10 hover:bg-white/20 text-white border-white/20 h-11 px-5 rounded-xl flex items-center gap-2 backdrop-blur-md">
-              <UploadCloud className="h-4 w-4" />
-              <span>Subir Rector</span>
+              <History className="h-4 w-4" />
+              <span>Ver Historial</span>
             </Button>
           </Link>
         </div>
       </div>
 
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Documentos Rectores
-            </CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-[#162874]/10 flex items-center justify-center text-[#162874]">
-              <BookOpen className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-black text-slate-900">{totalSourceDocs}</div>
+      {/* Feature Triple Deliverable Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white p-5 space-y-3">
+          <div className="w-10 h-10 rounded-xl bg-[#162874]/10 text-[#162874] flex items-center justify-center font-bold">
+            <BookOpen className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-[#0E1B4D]">1. Planning Book (SJB-RGA006)</h3>
             <p className="text-xs text-slate-500 mt-1">
-              {readySourceDocs} listos en base de conocimiento
+              Secuencia didáctica oficial: Referentes DBA/EBC, Arco Antes-Durante-Después, componente ACE bilingüe y bitácora.
             </p>
-          </CardContent>
+          </div>
         </Card>
 
-        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Fragmentos RAG
-            </CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-[#D71921]/10 flex items-center justify-center text-[#D71921]">
-              <Sparkles className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-black text-slate-900">{totalChunks}</div>
+        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white p-5 space-y-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
+            <TableProperties className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-[#0E1B4D]">2. Rúbricas & Cibercolegios</h3>
             <p className="text-xs text-slate-500 mt-1">
-              Vectores pgvector de 768 dimensiones
+              Menú de Desafíos (Bronze, Silver, Gold), ponderación 35/35/20/10 y bloque listo para copiar a Cibercolegios.
             </p>
-          </CardContent>
+          </div>
         </Card>
 
-        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Documentos Creados
-            </CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-              <FileText className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-black text-slate-900">{totalGenerated}</div>
+        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white p-5 space-y-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
+            <FileSpreadsheet className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-[#0E1B4D]">3. Planilla en Excel (.xlsx)</h3>
             <p className="text-xs text-slate-500 mt-1">
-              Disponibles para editar y exportar
+              Plantilla formateada con fórmulas automáticas para promedios ponderados por pilar, cálculo de notas y estadísticas.
             </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Motor Curricular
-            </CardTitle>
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-              <CheckCircle2 className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm font-bold text-emerald-700 flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
-              Gemini 2.0 Flash Activo
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Google AI Studio & Supabase OK
-            </p>
-          </CardContent>
+          </div>
         </Card>
       </div>
 
-      {/* Main Grid: Recent Documents + Knowledge Base */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Generated Documents (2 cols) */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-black text-[#0E1B4D]">Últimos Documentos Generados</h2>
-              <p className="text-xs text-slate-500">Documentos institucionales listos para abrir, editar o exportar</p>
-            </div>
-            <Link href="/history" className="text-xs font-bold text-[#162874] hover:text-[#D71921] flex items-center gap-1 transition-colors">
-              Ver todos ({totalGenerated})
-              <ArrowRight className="h-3 w-3" />
-            </Link>
+      {/* Recent Generated Documents Table */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-black text-[#0E1B4D]">Planeaciones Recientes</h2>
+            <p className="text-xs text-slate-500">Documentos curriculares generados listos para descargar en Word, PDF, Excel o ZIP</p>
           </div>
-
-          <Card className="border-slate-200 shadow-sm overflow-hidden rounded-2xl bg-white">
-            {generatedDocs && generatedDocs.length > 0 ? (
-              <div className="divide-y divide-slate-100">
-                {generatedDocs.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-slate-50/80 transition-colors"
-                  >
-                    <div className="space-y-1.5 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge className="text-[10px] bg-[#162874] text-white">
-                          {formatDocumentType(doc.document_type)}
-                        </Badge>
-                        <Badge variant="outline" className="text-[10px] border-slate-300 text-slate-700">
-                          {formatArea(doc.area)}
-                        </Badge>
-                        <Badge variant="secondary" className="text-[10px] uppercase font-bold text-[#D71921] bg-red-50">
-                          {doc.language}
-                        </Badge>
-                      </div>
-                      <h3 className="text-sm font-bold text-slate-900 truncate">
-                        {doc.title}
-                      </h3>
-                      <div className="flex items-center gap-3 text-xs text-slate-500">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {formatDate(doc.created_at)}
-                        </span>
-                        {doc.grado && <span>{doc.grado}</span>}
-                        {doc.periodo && <span>Periodo {doc.periodo}</span>}
-                      </div>
-                    </div>
-
-                    <Link href={`/preview/${doc.id}`} className="shrink-0">
-                      <Button size="sm" variant="outline" className="text-xs font-bold border-[#162874]/30 hover:bg-[#162874] hover:text-white rounded-xl transition-colors">
-                        Abrir y Editar
-                      </Button>
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-10 text-center space-y-3">
-                <FileText className="h-10 w-10 text-slate-300 mx-auto" />
-                <div>
-                  <p className="text-sm font-bold text-slate-800">Aún no has generado ningún documento</p>
-                  <p className="text-xs text-slate-500">Crea tu primer planeador de clase o plan de área en segundos.</p>
-                </div>
-                <Link href="/generate">
-                  <Button size="sm" className="bg-[#D71921] hover:bg-[#B81219] text-white font-bold rounded-xl mt-1">
-                    Crear primer documento
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </Card>
+          <Link href="/history" className="text-xs font-bold text-[#162874] hover:text-[#D71921] flex items-center gap-1 transition-colors">
+            Ver todas ({totalGenerated})
+            <ArrowRight className="h-3 w-3" />
+          </Link>
         </div>
 
-        {/* Knowledge Base Summary (1 col) */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-black text-[#0E1B4D]">Base de Conocimiento</h2>
-              <p className="text-xs text-slate-500">Documentos rectores que alimentan el RAG</p>
-            </div>
-            <Link href="/upload" className="text-xs font-bold text-[#162874] hover:text-[#D71921] flex items-center gap-1 transition-colors">
-              Subir más
-              <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
-
-          <Card className="border-slate-200 shadow-sm rounded-2xl bg-white">
-            <CardContent className="p-4 space-y-3">
-              {sourceDocs && sourceDocs.length > 0 ? (
-                <div className="space-y-2.5">
-                  {sourceDocs.slice(0, 5).map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2 hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-800 truncate">{doc.title}</p>
-                        <p className="text-[10px] text-slate-500 truncate">
-                          {formatArea(doc.area)} • {doc.chunk_count || 0} fragmentos
-                        </p>
-                      </div>
-                      <Badge
-                        className={`text-[10px] shrink-0 font-bold ${
-                          doc.status === 'ready'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : doc.status === 'processing'
-                            ? 'bg-sky-100 text-sky-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {doc.status === 'ready' ? 'Listo' : doc.status}
+        <Card className="border-slate-200 shadow-sm overflow-hidden rounded-2xl bg-white">
+          {generatedDocs && generatedDocs.length > 0 ? (
+            <div className="divide-y divide-slate-100">
+              {generatedDocs.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-slate-50/80 transition-colors"
+                >
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge className="text-[10px] bg-[#0E1B4D] text-white">
+                        SJB-RGA006
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px] border-slate-300 text-slate-700">
+                        {formatArea(doc.area)}
+                      </Badge>
+                      <Badge variant="secondary" className="text-[10px] uppercase font-bold text-[#D71921] bg-red-50">
+                        {doc.language}
                       </Badge>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-8 text-center space-y-2">
-                  <UploadCloud className="h-8 w-8 text-slate-300 mx-auto" />
-                  <p className="text-xs text-slate-600 font-medium">No hay documentos rectores subidos todavía.</p>
-                  <Link href="/upload">
-                    <Button size="sm" variant="outline" className="text-xs font-bold rounded-xl mt-2 border-slate-300">
-                      Subir documento rector (PDF)
+                    <h3 className="text-sm font-bold text-slate-900 truncate">
+                      {doc.title}
+                    </h3>
+                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {formatDate(doc.created_at)}
+                      </span>
+                      {doc.grado && <span>{doc.grado}</span>}
+                      {doc.periodo && <span>Periodo {doc.periodo}</span>}
+                    </div>
+                  </div>
+
+                  <Link href={`/preview/${doc.id}`} className="shrink-0">
+                    <Button size="sm" variant="outline" className="text-xs font-bold border-[#162874]/30 hover:bg-[#162874] hover:text-white rounded-xl transition-colors">
+                      Ver Paquete Completo
                     </Button>
                   </Link>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-10 text-center space-y-3">
+              <FileText className="h-10 w-10 text-slate-300 mx-auto" />
+              <div>
+                <p className="text-sm font-bold text-slate-800">Aún no has generado ninguna planeación</p>
+                <p className="text-xs text-slate-500">Sube el Plan de Área, SIAP y Cuadernillo para generar tu primer paquete curricular.</p>
+              </div>
+              <Link href="/generate">
+                <Button size="sm" className="bg-[#D71921] hover:bg-[#B81219] text-white font-bold rounded-xl mt-1">
+                  Generar Primera Planeación
+                </Button>
+              </Link>
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   )

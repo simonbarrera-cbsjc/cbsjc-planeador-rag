@@ -5,7 +5,6 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import {
   LayoutDashboard,
-  UploadCloud,
   FileEdit,
   History,
   LogOut,
@@ -76,19 +75,11 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
           </Link>
 
           <Link
-            href="/upload"
-            className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <UploadCloud className="h-4 w-4 text-sky-400" />
-            <span>Documentos Rectores</span>
-          </Link>
-
-          <Link
             href="/generate"
             className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#D71921] hover:bg-[#B81219] transition-colors shadow-sm"
           >
             <Sparkles className="h-4 w-4 text-white" />
-            <span>Generar Documento</span>
+            <span>Generar Planeación</span>
           </Link>
 
           <Link
@@ -96,7 +87,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
             className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-colors"
           >
             <History className="h-4 w-4 text-emerald-400" />
-            <span>Historial de Docs</span>
+            <span>Historial de Planeaciones</span>
           </Link>
         </nav>
 
@@ -104,10 +95,10 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
         <div className="p-3.5 mx-3 mb-3 rounded-xl bg-white/5 border border-white/10 text-[11px] text-slate-300 space-y-1.5">
           <div className="flex items-center gap-2 font-bold text-white">
             <GraduationCap className="h-4 w-4 text-[#D71921]" />
-            <span>RAG Curricular Activo</span>
+            <span>Planning Book SJB-RGA006</span>
           </div>
           <p className="text-slate-400 leading-tight">
-            Consultando en tiempo real los DBA, lineamientos y planes de área del CBSJC.
+            Motor RAG oficial alineado con el SIAP, Plan de Área y Cuadernillo institucional.
           </p>
         </div>
 
