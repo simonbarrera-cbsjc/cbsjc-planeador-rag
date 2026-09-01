@@ -1,0 +1,12 @@
+.env.local
+.env*.local
+node_modules/
+.next/
+out/
+dist/
+*.log
+npm-debug.log*
+.DS_Store
+*.pem
+.vercel
+coverage/
