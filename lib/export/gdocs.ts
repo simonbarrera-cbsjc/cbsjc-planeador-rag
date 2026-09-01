@@ -1,6 +1,10 @@
 import { google } from 'googleapis'
 import { markdownToPlainText } from '@/lib/utils'
 
+if (typeof window !== 'undefined') {
+  throw new Error('lib/export/gdocs.ts must only be used on the server.')
+}
+
 interface CreateGoogleDocParams {
   title: string
   content: string
@@ -9,6 +13,15 @@ interface CreateGoogleDocParams {
 
 export async function createGoogleDoc(params: CreateGoogleDocParams): Promise<{ docId: string; docUrl: string }> {
   const { title, content, userEmail } = params
+
+  if (!title || title.trim().length === 0) {
+    throw new Error('createGoogleDoc: document title must not be empty.')
+  }
+
+  if (!content || content.trim().length === 0) {
+    throw new Error('createGoogleDoc: document content must not be empty.')
+  }
+
   const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
 
   if (!serviceAccountJson) {

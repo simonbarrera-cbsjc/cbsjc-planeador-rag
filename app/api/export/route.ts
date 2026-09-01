@@ -20,6 +20,12 @@ import { generateDocx } from '@/lib/export/docx'
 import { createGoogleDoc } from '@/lib/export/gdocs'
 import { formatDate } from '@/lib/utils'
 import type { GeneratedDocumentStatus } from '@/types'
+import {
+  rateLimit,
+  RATE_LIMIT_PRESETS,
+  createRateLimitResponse,
+  addRateLimitHeaders,
+} from '@/lib/security/rate-limit'
 
 const EXPORTS_BUCKET = 'generated-exports'
 const SIGNED_URL_EXPIRY_SECONDS = 3600 // 1 hour
@@ -66,6 +72,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   if (authError || !user) {
     return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+  }
+
+  // Rate limit check (20 requests/minute per authenticated user or IP)
+  const rateLimitResult = rateLimit(request, RATE_LIMIT_PRESETS.export, user.id)
+  if (!rateLimitResult.success) {
+    return createRateLimitResponse(
+      rateLimitResult,
+      `Has excedido el límite de exportación (${RATE_LIMIT_PRESETS.export.limit} solicitudes por minuto). Por favor espera ${rateLimitResult.retryAfterSeconds} segundos.`
+    )
   }
 
   let body: unknown
@@ -131,7 +146,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         })
         .eq('id', documentId)
 
-      return NextResponse.json({ success: true, downloadUrl: signedUrl }, { status: 200 })
+      const response = NextResponse.json({ success: true, downloadUrl: signedUrl }, { status: 200 })
+      return addRateLimitHeaders(response, rateLimitResult)
     }
 
     if (format === 'docx') {
@@ -166,7 +182,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         })
         .eq('id', documentId)
 
-      return NextResponse.json({ success: true, downloadUrl: signedUrl }, { status: 200 })
+      const response = NextResponse.json({ success: true, downloadUrl: signedUrl }, { status: 200 })
+      return addRateLimitHeaders(response, rateLimitResult)
     }
 
     if (format === 'gdocs') {
@@ -184,7 +201,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         })
         .eq('id', documentId)
 
-      return NextResponse.json({ success: true, gdocsUrl: docUrl }, { status: 200 })
+      const response = NextResponse.json({ success: true, gdocsUrl: docUrl }, { status: 200 })
+      return addRateLimitHeaders(response, rateLimitResult)
     }
 
     return NextResponse.json({ success: false, error: 'Formato no soportado' }, { status: 400 })

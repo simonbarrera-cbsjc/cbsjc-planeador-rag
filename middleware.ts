@@ -5,6 +5,22 @@ import type { Database } from '@/types/supabase'
 const PROTECTED_PREFIXES = ['/dashboard', '/upload', '/generate', '/preview', '/history']
 const AUTH_ROUTES = ['/login']
 
+const SECURITY_HEADERS: Record<string, string> = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'X-XSS-Protection': '1; mode=block',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
+}
+
+function applySecurityHeaders(res: NextResponse): NextResponse {
+  for (const [header, value] of Object.entries(SECURITY_HEADERS)) {
+    res.headers.set(header, value)
+  }
+  return res
+}
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -42,7 +58,7 @@ export async function middleware(request: NextRequest) {
     const loginUrl = request.nextUrl.clone()
     loginUrl.pathname = '/login'
     loginUrl.searchParams.set('next', pathname)
-    return NextResponse.redirect(loginUrl)
+    return applySecurityHeaders(NextResponse.redirect(loginUrl))
   }
 
   // Redirect authenticated users away from login
@@ -50,10 +66,10 @@ export async function middleware(request: NextRequest) {
     const dashboardUrl = request.nextUrl.clone()
     dashboardUrl.pathname = '/dashboard'
     dashboardUrl.searchParams.delete('next')
-    return NextResponse.redirect(dashboardUrl)
+    return applySecurityHeaders(NextResponse.redirect(dashboardUrl))
   }
 
-  return supabaseResponse
+  return applySecurityHeaders(supabaseResponse)
 }
 
 export const config = {

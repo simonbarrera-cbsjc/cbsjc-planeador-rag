@@ -14,10 +14,25 @@ import type { DocumentArea, DocumentCategory, SourceDocumentStatus } from '@/typ
 
 const STORAGE_BUCKET = 'source-documents'
 
+const DOCUMENT_CATEGORIES = ['primaria', 'secundaria', 'bachillerato', 'general'] as const
+const DOCUMENT_AREAS = [
+  'matematicas',
+  'ciencias',
+  'humanidades',
+  'ingles',
+  'sociales',
+  'artes',
+  'educacion_fisica',
+  'tecnologia',
+  'religion',
+  'general',
+] as const
+const SOURCE_STATUSES = ['pending', 'processing', 'ready', 'error'] as const
+
 const listQuerySchema = z.object({
-  category: z.string().optional(),
-  area: z.string().optional(),
-  status: z.string().optional(),
+  category: z.enum(DOCUMENT_CATEGORIES).optional(),
+  area: z.enum(DOCUMENT_AREAS).optional(),
+  status: z.enum(SOURCE_STATUSES).optional(),
 })
 
 const deleteQuerySchema = z.object({

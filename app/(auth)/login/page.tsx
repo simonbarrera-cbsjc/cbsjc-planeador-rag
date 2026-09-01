@@ -23,6 +23,7 @@ import {
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState('')
+  const [honeypot, setHoneypot] = useState('') // Honeypot trap for bots
   const [emailSent, setEmailSent] = useState(false)
   const [loginMethod, setLoginMethod] = useState<'google' | 'email'>('google')
   const { toast } = useToast()
@@ -30,6 +31,12 @@ export default function LoginPage() {
 
   // Google OAuth Login
   const handleGoogleLogin = async () => {
+    // Bot check
+    if (honeypot) {
+      console.warn('Bot detected via honeypot trap.')
+      return
+    }
+
     try {
       setIsLoading(true)
       const { error } = await supabase.auth.signInWithOAuth({
@@ -45,8 +52,8 @@ export default function LoginPage() {
       if (error) {
         if (error.message.includes('provider is not enabled') || error.message.includes('Unsupported provider')) {
           toast({
-            title: 'Google OAuth pendiente de activación',
-            description: 'El proveedor Google aún no está activado en tu panel de Supabase. Puedes usar el acceso directo por correo.',
+            title: 'Google OAuth pendiente de activación en Supabase',
+            description: 'Puedes ingresar directamente con tu correo institucional en el formulario inferior.',
             variant: 'warning',
           })
           setLoginMethod('email')
@@ -69,6 +76,14 @@ export default function LoginPage() {
   // Institutional Magic Link / Email Login
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Honeypot bot protection: silently reject automated submissions
+    if (honeypot && honeypot.trim().length > 0) {
+      console.warn('Bot submission blocked via honeypot trap.')
+      setEmailSent(true)
+      return
+    }
+
     if (!email || !email.includes('@')) {
       toast({
         title: 'Correo inválido',
@@ -297,6 +312,20 @@ export default function LoginPage() {
 
                   {/* Direct Institutional Email OTP Form */}
                   <form onSubmit={handleEmailLogin} className="space-y-3">
+                    {/* Honeypot Trap Input (hidden from real users, filled by bots) */}
+                    <div className="opacity-0 absolute -left-[9999px] top-0 h-0 w-0 pointer-events-none overflow-hidden" aria-hidden="true">
+                      <label htmlFor="website_institution_check">Do not fill this field</label>
+                      <input
+                        id="website_institution_check"
+                        type="text"
+                        name="website_institution_check"
+                        value={honeypot}
+                        onChange={(e) => setHoneypot(e.target.value)}
+                        tabIndex={-1}
+                        autoComplete="off"
+                      />
+                    </div>
+
                     <div className="space-y-1">
                       <div className="relative">
                         <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />

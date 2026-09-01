@@ -1,10 +1,25 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import type { TablesUpdate } from '@/types/supabase'
 
+const getQuerySchema = z.object({
+  id: z.string().uuid('ID de documento debe ser un UUID válido').optional(),
+})
+
+const patchBodySchema = z.object({
+  id: z.string().uuid('ID de documento debe ser un UUID válido'),
+  title: z.string().min(1, 'El título no puede estar vacío').max(300, 'El título no puede exceder 300 caracteres').trim().optional(),
+  content: z.string().min(1, 'El contenido no puede estar vacío').max(150000, 'El contenido excede el tamaño máximo permitido').optional(),
+})
+
+const deleteQuerySchema = z.object({
+  id: z.string().uuid('ID de documento debe ser un UUID válido'),
+})
+
 // GET /api/generated-documents or GET /api/generated-documents?id=...
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
     const {
@@ -17,7 +32,17 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url)
-    const id = searchParams.get('id')
+    const rawId = searchParams.get('id') || undefined
+
+    const parsed = getQuerySchema.safeParse({ id: rawId })
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const { id } = parsed.data
 
     if (id) {
       const { data: document, error } = await supabaseAdmin
@@ -56,7 +81,7 @@ export async function GET(request: Request) {
 }
 
 // PATCH /api/generated-documents (update content/title)
-export async function PATCH(request: Request) {
+export async function PATCH(request: NextRequest) {
   try {
     const supabase = await createClient()
     const {
@@ -68,12 +93,22 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
     }
 
-    const body = await request.json()
-    const { id, content, title } = body
-
-    if (!id) {
-      return NextResponse.json({ success: false, error: 'ID de documento requerido' }, { status: 400 })
+    let body: unknown
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ success: false, error: 'JSON inválido' }, { status: 400 })
     }
+
+    const parsed = patchBodySchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+
+    const { id, content, title } = parsed.data
 
     const updatePayload: TablesUpdate<'generated_documents'> = {
       updated_at: new Date().toISOString(),
@@ -89,8 +124,8 @@ export async function PATCH(request: Request) {
       .select()
       .single()
 
-    if (error) {
-      throw error
+    if (error || !updated) {
+      return NextResponse.json({ success: false, error: 'Documento no encontrado o error al actualizar' }, { status: 404 })
     }
 
     return NextResponse.json({ success: true, document: updated })
@@ -104,7 +139,7 @@ export async function PATCH(request: Request) {
 }
 
 // DELETE /api/generated-documents?id=...
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
     const supabase = await createClient()
     const {
@@ -117,11 +152,17 @@ export async function DELETE(request: Request) {
     }
 
     const { searchParams } = new URL(request.url)
-    const id = searchParams.get('id')
+    const rawId = searchParams.get('id')
 
-    if (!id) {
-      return NextResponse.json({ success: false, error: 'ID requerido' }, { status: 400 })
+    const parsed = deleteQuerySchema.safeParse({ id: rawId })
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      )
     }
+
+    const { id } = parsed.data
 
     const { error } = await supabaseAdmin
       .from('generated_documents')

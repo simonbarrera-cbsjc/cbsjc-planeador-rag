@@ -17,6 +17,12 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { extractTextFromPdf } from '@/lib/ai/pdf-parser'
 import { chunkText } from '@/lib/ai/chunker'
 import { generateEmbeddings } from '@/lib/ai/embeddings'
+import {
+  rateLimit,
+  RATE_LIMIT_PRESETS,
+  createRateLimitResponse,
+  addRateLimitHeaders,
+} from '@/lib/security/rate-limit'
 
 const EMBED_BATCH_SIZE = 20
 
@@ -33,6 +39,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   if (authError || !user) {
     return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+  }
+
+  // Rate limit check (20 requests/minute per authenticated user or IP)
+  const rateLimitResult = rateLimit(request, RATE_LIMIT_PRESETS.embed, user.id)
+  if (!rateLimitResult.success) {
+    return createRateLimitResponse(
+      rateLimitResult,
+      `Has excedido el límite de procesamiento de documentos (${RATE_LIMIT_PRESETS.embed.limit} solicitudes por minuto). Por favor espera ${rateLimitResult.retryAfterSeconds} segundos.`
+    )
   }
 
   let body: unknown
@@ -144,7 +159,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       })
       .eq('id', sourceDocId)
 
-    return NextResponse.json({ success: true, chunkCount: totalInserted }, { status: 200 })
+    const successResponse = NextResponse.json(
+      { success: true, chunkCount: totalInserted },
+      { status: 200 }
+    )
+    return addRateLimitHeaders(successResponse, rateLimitResult)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error desconocido durante la vectorización'
 

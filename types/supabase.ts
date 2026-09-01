@@ -184,16 +184,20 @@ type GeneratedDocumentUpdate = Partial<
  * The function performs an approximate nearest-neighbour search using pgvector.
  */
 type MatchChunksArgs = {
-  /** Query vector produced by text-embedding-004 (1536 dimensions) */
+  /** Query vector produced by text-embedding-004 (768 dimensions) */
   query_embedding: number[]
-  /** Minimum cosine similarity score to include (default 0.7) */
+  /** Minimum cosine similarity score to include (default 0.5) */
   match_threshold?: number
-  /** Maximum number of chunks to return (default 5) */
+  /** Maximum number of chunks to return (default 10) */
   match_count?: number
   /** Optional DocumentArea filter applied before vector search */
   filter_area?: string
   /** Optional DocumentCategory filter applied before vector search */
   filter_category?: string
+  /** Optional user_id filter for tenant isolation */
+  filter_user_id?: string
+  /** Optional source_doc_id filter for single document retrieval */
+  filter_source_doc_id?: string
 }
 
 /** Single row returned by the match_chunks RPC. */

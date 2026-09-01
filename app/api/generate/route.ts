@@ -16,6 +16,12 @@ import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { retrieveRelevantChunks } from '@/lib/ai/retrieval'
 import { generateDocument } from '@/lib/ai/generator'
+import {
+  rateLimit,
+  RATE_LIMIT_PRESETS,
+  createRateLimitResponse,
+  addRateLimitHeaders,
+} from '@/lib/security/rate-limit'
 
 // ---------------------------------------------------------------------------
 // Validation schema
@@ -57,10 +63,10 @@ const generateBodySchema = z.object({
   language: z.enum(LANGUAGES),
   nivel: z.enum(DOCUMENT_CATEGORIES),
   area: z.enum(DOCUMENT_AREAS),
-  grado: z.string().optional(),
+  grado: z.string().max(50).trim().optional(),
   periodo: z.enum(PERIODOS).optional(),
-  additionalInstructions: z.string().max(3000).optional(),
-  title: z.string().min(1).max(300),
+  additionalInstructions: z.string().max(3000).trim().optional(),
+  title: z.string().min(1, 'El título es obligatorio').max(300, 'El título no puede exceder 300 caracteres').trim(),
 })
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -75,7 +81,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
   }
 
-  // 2. Parse + validate body
+  // 2. Rate limit check (10 requests/minute per authenticated user or IP)
+  const rateLimitResult = rateLimit(request, RATE_LIMIT_PRESETS.generate, user.id)
+  if (!rateLimitResult.success) {
+    return createRateLimitResponse(
+      rateLimitResult,
+      `Has excedido el límite de generación (${RATE_LIMIT_PRESETS.generate.limit} solicitudes por minuto). Por favor espera ${rateLimitResult.retryAfterSeconds} segundos antes de intentar nuevamente.`
+    )
+  }
+
+  // 3. Parse + validate body
   let body: unknown
   try {
     body = await request.json()
@@ -93,7 +108,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const params = parsed.data
 
-  // 3. Build a comprehensive search query for RAG retrieval
+  // 4. Build a comprehensive search query for RAG retrieval
   const searchQuery = [
     params.title,
     params.documentType,
@@ -106,7 +121,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .filter(Boolean)
     .join(' ')
 
-  // 4. Retrieve relevant chunks with area + category filters
+  // 5. Retrieve relevant chunks with area + category filters
   let contextChunks: Array<{ content: string; similarity: number }> = []
   try {
     const matched = await retrieveRelevantChunks(searchQuery, {
@@ -125,7 +140,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     contextChunks = []
   }
 
-  // 5. Generate document via Gemini 2.0 Flash
+  // 6. Generate document via Gemini 2.0 Flash
   let generatedContent: string
   try {
     generatedContent = await generateDocument({
@@ -148,7 +163,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
   }
 
-  // 6. Persist the generated document to Supabase
+  // 7. Persist the generated document to Supabase
   const { data: savedDoc, error: insertError } = await supabaseAdmin
     .from('generated_documents')
     .insert({
@@ -176,8 +191,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
   }
 
-  // 7. Return success
-  return NextResponse.json(
+  // 8. Return success with rate limit headers
+  const successResponse = NextResponse.json(
     {
       success: true,
       documentId: savedDoc.id,
@@ -186,4 +201,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     },
     { status: 200 }
   )
+
+  return addRateLimitHeaders(successResponse, rateLimitResult)
 }

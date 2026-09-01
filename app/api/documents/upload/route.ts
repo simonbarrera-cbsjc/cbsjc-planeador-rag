@@ -7,13 +7,41 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import type { DocumentCategory, DocumentArea } from '@/types'
+import {
+  rateLimit,
+  RATE_LIMIT_PRESETS,
+  createRateLimitResponse,
+  addRateLimitHeaders,
+} from '@/lib/security/rate-limit'
 
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
 const ALLOWED_MIME_TYPE = 'application/pdf'
 const STORAGE_BUCKET = 'source-documents'
+
+const DOCUMENT_CATEGORIES = ['primaria', 'secundaria', 'bachillerato', 'general'] as const
+const DOCUMENT_AREAS = [
+  'matematicas',
+  'ciencias',
+  'humanidades',
+  'ingles',
+  'sociales',
+  'artes',
+  'educacion_fisica',
+  'tecnologia',
+  'religion',
+  'general',
+] as const
+
+const uploadFormSchema = z.object({
+  title: z.string().min(1, 'El título es obligatorio').max(200, 'El título no puede exceder 200 caracteres').trim(),
+  category: z.enum(DOCUMENT_CATEGORIES),
+  area: z.enum(DOCUMENT_AREAS),
+  description: z.string().max(1000, 'La descripción no puede exceder 1000 caracteres').trim().nullable().optional(),
+})
 
 function sanitiseFilename(name: string): string {
   return name
@@ -34,6 +62,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
   }
 
+  // Rate limit check (20 requests/minute per user / IP)
+  const rateLimitResult = rateLimit(request, RATE_LIMIT_PRESETS.upload, user.id)
+  if (!rateLimitResult.success) {
+    return createRateLimitResponse(
+      rateLimitResult,
+      `Has excedido el límite de subida de documentos (${RATE_LIMIT_PRESETS.upload.limit} por minuto). Por favor espera ${rateLimitResult.retryAfterSeconds} segundos.`
+    )
+  }
+
   let formData: FormData
   try {
     formData = await request.formData()
@@ -42,17 +79,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const file = formData.get('file')
-  const title = (formData.get('title') || formData.get('name') || '') as string
-  const category = (formData.get('category') || 'general') as DocumentCategory
-  const area = (formData.get('area') || 'general') as DocumentArea
-  const description = (formData.get('description') || null) as string | null
+  const rawData = {
+    title: formData.get('title') || formData.get('name') || '',
+    category: formData.get('category') || 'general',
+    area: formData.get('area') || 'general',
+    description: formData.get('description') || null,
+  }
+
+  const parsed = uploadFormSchema.safeParse(rawData)
+  if (!parsed.success) {
+    return NextResponse.json(
+      { success: false, error: parsed.error.flatten().fieldErrors },
+      { status: 400 }
+    )
+  }
+
+  const { title, category, area, description } = parsed.data
 
   if (!(file instanceof File)) {
     return NextResponse.json({ success: false, error: 'Se requiere un archivo PDF' }, { status: 400 })
-  }
-
-  if (!title.trim()) {
-    return NextResponse.json({ success: false, error: 'El título es obligatorio' }, { status: 400 })
   }
 
   if (file.type !== ALLOWED_MIME_TYPE && !file.name.endsWith('.pdf')) {
@@ -120,5 +165,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
   }
 
-  return NextResponse.json({ success: true, documentId: newDoc.id }, { status: 201 })
+  const successResponse = NextResponse.json({ success: true, documentId: newDoc.id }, { status: 201 })
+  return addRateLimitHeaders(successResponse, rateLimitResult)
 }

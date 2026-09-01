@@ -6,11 +6,13 @@ import {
   View,
   StyleSheet,
   renderToBuffer,
-  Font,
 } from '@react-pdf/renderer'
-import { markdownToPlainText } from '@/lib/utils'
 
-// Create styles for institutional PDF
+if (typeof window !== 'undefined') {
+  throw new Error('lib/export/pdf.tsx must only be used on the server.')
+}
+
+// Create styles for institutional PDF with official CBSJC brand colors
 const styles = StyleSheet.create({
   page: {
     paddingTop: 45,
@@ -18,13 +20,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 50,
     fontSize: 10,
     fontFamily: 'Helvetica',
-    color: '#1a1a2e',
+    color: '#1A1A2E',
     backgroundColor: '#FFFFFF',
     lineHeight: 1.5,
   },
   header: {
     borderBottomWidth: 2,
-    borderBottomColor: '#003087',
+    borderBottomColor: '#0E1B4D',
     paddingBottom: 12,
     marginBottom: 20,
     flexDirection: 'row',
@@ -37,18 +39,18 @@ const styles = StyleSheet.create({
   schoolName: {
     fontSize: 14,
     fontFamily: 'Helvetica-Bold',
-    color: '#003087',
+    color: '#0E1B4D',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   schoolSubtitle: {
     fontSize: 8.5,
-    color: '#C8A84B',
+    color: '#D71921',
     fontFamily: 'Helvetica-Bold',
     marginTop: 2,
   },
   headerBadge: {
-    backgroundColor: '#003087',
+    backgroundColor: '#0E1B4D',
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 4,
@@ -75,7 +77,7 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     fontFamily: 'Helvetica-Bold',
-    color: '#003087',
+    color: '#0E1B4D',
     fontSize: 8.5,
     width: 80,
   },
@@ -87,14 +89,14 @@ const styles = StyleSheet.create({
   documentTitle: {
     fontSize: 15,
     fontFamily: 'Helvetica-Bold',
-    color: '#003087',
+    color: '#0E1B4D',
     marginBottom: 14,
     textAlign: 'center',
   },
   h1: {
     fontSize: 13,
     fontFamily: 'Helvetica-Bold',
-    color: '#003087',
+    color: '#0E1B4D',
     marginTop: 14,
     marginBottom: 6,
     borderBottomWidth: 1,
@@ -104,7 +106,7 @@ const styles = StyleSheet.create({
   h2: {
     fontSize: 11,
     fontFamily: 'Helvetica-Bold',
-    color: '#003087',
+    color: '#0E1B4D',
     marginTop: 10,
     marginBottom: 4,
   },
@@ -130,7 +132,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#003087',
+    backgroundColor: '#D71921',
     marginRight: 6,
     marginTop: 5,
   },
@@ -175,6 +177,7 @@ interface ParsedLine {
 }
 
 function parseMarkdownToPdfLines(content: string): ParsedLine[] {
+  if (!content) return []
   const lines = content.split('\n')
   const result: ParsedLine[] = []
 
@@ -290,7 +293,15 @@ function InstitutionalPdfDocument({ title, content, documentType, language, meta
 }
 
 export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
-  const doc = <InstitutionalPdfDocument {...params} />
-  const buffer = await renderToBuffer(doc)
-  return Buffer.from(buffer)
+  if (!params.content || params.content.trim().length === 0) {
+    throw new Error('generatePdf: document content must not be empty.')
+  }
+  try {
+    const doc = <InstitutionalPdfDocument {...params} />
+    const buffer = await renderToBuffer(doc)
+    return Buffer.from(buffer)
+  } catch (error) {
+    console.error('Error generating PDF:', error)
+    throw new Error(`PDF generation failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
