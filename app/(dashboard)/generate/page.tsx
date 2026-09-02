@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,6 +32,7 @@ import {
   GraduationCap,
   PlusCircle,
   FileSpreadsheet,
+  Loader2,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -85,16 +87,47 @@ export default function GeneratePage() {
   // Additional multi-documents slot
   const [adicionalesFiles, setAdicionalesFiles] = useState<File[]>([])
 
-  // Refs for hidden inputs
+  // Validation errors list
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
+
+  // Refs for hidden inputs and sections
   const planRef = useRef<HTMLInputElement>(null)
   const siapRef = useRef<HTMLInputElement>(null)
   const cuadernilloRef = useRef<HTMLInputElement>(null)
   const adicionalesRef = useRef<HTMLInputElement>(null)
+  const docenteInputRef = useRef<HTMLInputElement>(null)
+  const temaInputRef = useRef<HTMLInputElement>(null)
 
   // Progress state
   const [isGenerating, setIsGenerating] = useState(false)
   const [stepMessage, setStepMessage] = useState('')
   const [progressPercent, setProgressPercent] = useState(0)
+
+  // Pre-populate docente from user session
+  useEffect(() => {
+    async function loadUserProfile() {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', user.id)
+            .maybeSingle()
+          const fullName = (profile as { full_name?: string } | null)?.full_name
+          if (fullName && !docente) {
+            setDocente(fullName)
+          } else if (user.email && !docente) {
+            setDocente(user.email.split('@')[0])
+          }
+        }
+      } catch (err) {
+        console.warn('Could not prefill user profile:', err)
+      }
+    }
+    loadUserProfile()
+  }, [])
 
   // File validator (PDF, DOCX, MD)
   const validateAndGetFile = (e: React.ChangeEvent<HTMLInputElement>): File | null => {
@@ -116,6 +149,7 @@ export default function GeneratePage() {
         })
         return null
       }
+      setValidationErrors((prev) => prev.filter((err) => !err.includes('documento') && !err.includes(name)))
       return file
     }
     return null
@@ -144,30 +178,43 @@ export default function GeneratePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!docente.trim()) {
-      toast({ title: 'Campo requerido', description: 'Ingresa el nombre del docente.', variant: 'warning' })
-      return
-    }
-
-    if (!tema.trim()) {
-      toast({ title: 'Campo requerido', description: 'Ingresa el tema o título de la secuencia didáctica.', variant: 'warning' })
-      return
-    }
+    const errors: string[] = []
 
     if (!planDeAreaFile) {
-      toast({ title: 'Plan de Área requerido', description: 'Debes subir el documento rector del Plan de Área.', variant: 'warning' })
-      return
+      errors.push('Subir el documento rector "1. Plan de Área"')
     }
-
     if (!siapFile) {
-      toast({ title: 'SIAP requerido', description: 'Debes subir el documento del SIAP institucional.', variant: 'warning' })
+      errors.push('Subir el documento rector "2. SIAP Institucional"')
+    }
+    if (!cuadernilloFile) {
+      errors.push('Subir el documento rector "3. Cuadernillo de Asignatura"')
+    }
+    if (!docente.trim()) {
+      errors.push('Ingresar el "Docente(s) Responsable(s)"')
+    }
+    if (!tema.trim()) {
+      errors.push('Ingresar el "Tema o Pregunta de Sentido"')
+    }
+
+    if (errors.length > 0) {
+      setValidationErrors(errors)
+      toast({
+        title: 'Faltan campos obligatorios',
+        description: `Por favor completa: ${errors[0]}`,
+        variant: 'warning',
+      })
+
+      if (!planDeAreaFile) {
+        planRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } else if (!docente.trim()) {
+        docenteInputRef.current?.focus()
+      } else if (!tema.trim()) {
+        temaInputRef.current?.focus()
+      }
       return
     }
 
-    if (!cuadernilloFile) {
-      toast({ title: 'Cuadernillo requerido', description: 'Debes subir el Cuadernillo o guía de la asignatura.', variant: 'warning' })
-      return
-    }
+    setValidationErrors([])
 
     try {
       setIsGenerating(true)
@@ -183,21 +230,32 @@ export default function GeneratePage() {
       formData.append('tema', tema.trim())
       formData.append('additionalInstructions', additionalInstructions.trim())
 
-      formData.append('plan_de_area', planDeAreaFile)
-      formData.append('siap', siapFile)
-      formData.append('cuadernillo', cuadernilloFile)
+      formData.append('plan_de_area', planDeAreaFile!)
+      formData.append('siap', siapFile!)
+      formData.append('cuadernillo', cuadernilloFile!)
 
       adicionalesFiles.forEach((file) => {
         formData.append('adicionales', file)
       })
 
-      setProgressPercent(45)
-      setStepMessage('Estructurando Planning Book oficial (SJB-RGA006), Rúbricas y Planilla con Gemini 2.0 Flash...')
+      // Simulate dynamic progression while AI runs in parallel
+      const timer1 = setTimeout(() => {
+        setProgressPercent(45)
+        setStepMessage('Ejecutando motor multi-etapa: Generando Identificación y Arco Pedagógico (Semanas 1 a 4)...')
+      }, 4000)
+
+      const timer2 = setTimeout(() => {
+        setProgressPercent(75)
+        setStepMessage('Generando Rúbricas Menú de Desafíos, Planilla de Notas y Evaluaciones Finales...')
+      }, 12000)
 
       const res = await fetch('/api/generate', {
         method: 'POST',
         body: formData,
       })
+
+      clearTimeout(timer1)
+      clearTimeout(timer2)
 
       const json = await res.json()
 
@@ -206,7 +264,7 @@ export default function GeneratePage() {
       }
 
       setProgressPercent(100)
-      setStepMessage('¡Planeación, Rúbricas y Planilla de Notas generadas con éxito!')
+      setStepMessage('¡Planeación de 18+ páginas, Rúbricas y Planilla generadas con éxito!')
 
       toast({
         title: '¡Paquete Curricular Listo!',
@@ -453,14 +511,20 @@ export default function GeneratePage() {
           <CardContent className="p-6 space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="docente">Docente(s) Responsable(s) *</Label>
+                <Label htmlFor="docente" className={validationErrors.some(e => e.includes('Docente')) ? 'text-red-600 font-bold' : ''}>
+                  Docente(s) Responsable(s) *
+                </Label>
                 <Input
+                  ref={docenteInputRef}
                   id="docente"
                   placeholder="Ej: Lic. Simón Barrera & Prof. Carolina Gómez"
                   value={docente}
-                  onChange={(e) => setDocente(e.target.value)}
+                  onChange={(e) => {
+                    setDocente(e.target.value)
+                    setValidationErrors((prev) => prev.filter((err) => !err.includes('Docente')))
+                  }}
                   required
-                  className="rounded-xl"
+                  className={`rounded-xl ${validationErrors.some(e => e.includes('Docente')) ? 'border-red-500 bg-red-50/30' : ''}`}
                 />
               </div>
 
@@ -527,14 +591,20 @@ export default function GeneratePage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="tema">Tema o Pregunta de Sentido de la Secuencia *</Label>
+              <Label htmlFor="tema" className={validationErrors.some(e => e.includes('Tema')) ? 'text-red-600 font-bold' : ''}>
+                Tema o Pregunta de Sentido de la Secuencia *
+              </Label>
               <Input
+                ref={temaInputRef}
                 id="tema"
                 placeholder="Ej: La célula como unidad funcional y estructural de los seres vivos"
                 value={tema}
-                onChange={(e) => setTema(e.target.value)}
+                onChange={(e) => {
+                  setTema(e.target.value)
+                  setValidationErrors((prev) => prev.filter((err) => !err.includes('Tema')))
+                }}
                 required
-                className="rounded-xl font-medium"
+                className={`rounded-xl font-medium ${validationErrors.some(e => e.includes('Tema')) ? 'border-red-500 bg-red-50/30' : ''}`}
               />
             </div>
 
@@ -554,6 +624,21 @@ export default function GeneratePage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Validation Errors Box */}
+        {validationErrors.length > 0 && (
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 space-y-2">
+            <div className="flex items-center gap-2 font-bold text-xs text-amber-800">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <span>Por favor completa los siguientes campos obligatorios antes de generar:</span>
+            </div>
+            <ul className="list-disc list-inside text-xs space-y-1 pl-1 text-amber-800">
+              {validationErrors.map((err, i) => (
+                <li key={i}>{err}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* SECTION 3: GENERATION SUMMARY & CTA */}
         <div className="p-6 rounded-2xl bg-[#0E1B4D] text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
@@ -602,17 +687,23 @@ export default function GeneratePage() {
 
         {/* Progress Tracker Modal / Banner */}
         {isGenerating && (
-          <div className="p-5 rounded-2xl bg-blue-50 border border-blue-200 space-y-3">
+          <div className="p-6 rounded-2xl bg-blue-50 border-2 border-blue-300 shadow-lg space-y-3 animate-pulse">
             <div className="flex items-center justify-between text-xs font-bold text-[#0E1B4D]">
-              <span>{stepMessage}</span>
-              <span>{progressPercent}%</span>
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-[#D71921]" />
+                {stepMessage}
+              </span>
+              <span className="text-sm font-black text-[#D71921]">{progressPercent}%</span>
             </div>
-            <div className="w-full bg-blue-200 h-2 rounded-full overflow-hidden">
+            <div className="w-full bg-blue-200 h-3 rounded-full overflow-hidden">
               <div
-                className="bg-[#D71921] h-full transition-all duration-500 rounded-full"
+                className="bg-[#D71921] h-full transition-all duration-700 rounded-full"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
+            <p className="text-[11px] text-slate-500 text-center">
+              Por favor no cierres esta pestaña. Gemini está estructurando ~65.000 caracteres (18 a 24 páginas). Tiempo estimado: 25 a 35 segundos.
+            </p>
           </div>
         )}
       </form>
