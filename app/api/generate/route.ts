@@ -25,7 +25,7 @@ import {
   addRateLimitHeaders,
 } from '@/lib/security/rate-limit'
 
-export const maxDuration = 60 // 60 seconds timeout for heavy extraction / AI generation
+export const maxDuration = 300 // 300 seconds timeout for exhaustive 18+ page AI generation and deep extraction
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024 // 25 MB per file
 const MAX_TOTAL_SIZE_BYTES = 60 * 1024 * 1024 // 60 MB total payload

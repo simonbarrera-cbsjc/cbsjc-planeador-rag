@@ -22,13 +22,12 @@ import fs from 'fs'
 import path from 'path'
 
 if (typeof window !== 'undefined') {
-  throw new Error('lib/export/docx.ts must only be used on the server.')
+  throw new Error('lib/export/rubrics-docx.ts must only be used on the server.')
 }
 
-export interface GenerateDocxParams {
+export interface GenerateRubricsDocxParams {
   title: string
   content: string
-  documentType?: string
   language?: 'es' | 'en'
   metadata: {
     area?: string
@@ -52,7 +51,6 @@ const COLOR_BORDER_GRAY = 'CBD5E1' // Single 0.5pt Border
 const COLOR_SHADING_LIGHT = 'D9E2F3' // Light Blue/Gray Metadata Fill
 const COLOR_SHADING_SOFT = 'EEF2F9' // Soft Ice Blue/Gray Fill
 const COLOR_SHADING_ZEBRA = 'F8FAFC' // Table Zebra Fill
-const COLOR_SHADING_CONTAINER = 'F1F5F9' // Cibercolegios Box Fill
 
 const standardBorder = {
   top: { style: BorderStyle.SINGLE, size: 4, color: COLOR_BORDER_GRAY },
@@ -62,7 +60,7 @@ const standardBorder = {
 }
 
 /**
- * Parses markdown inline formatting (bold, italic, code, line breaks) into TextRun objects.
+ * Parses markdown inline formatting (bold, italic, code) into TextRun objects.
  */
 function parseInlineRuns(
   text: string,
@@ -78,12 +76,11 @@ function parseInlineRuns(
     bold = false,
     italics = false,
     color = COLOR_TEXT_DARK,
-    size = 18, // 9pt
+    size = 18,
     font = 'Calibri',
   } = defaults
 
   const runs: TextRun[] = []
-  // Split on bold (**text**) or italic (*text*)
   const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`)/g
   const parts = text.split(regex)
 
@@ -151,7 +148,7 @@ function parseInlineRuns(
 }
 
 /**
- * Creates a styled TableCell supporting rich multiline text, bold markers, and borders.
+ * Creates a styled TableCell supporting rich multiline text and borders.
  */
 function createStyledCell(
   content: string | string[] | Paragraph[],
@@ -212,7 +209,7 @@ function createStyledCell(
   return new TableCell({
     width: width ? { size: width, type: WidthType.PERCENTAGE } : undefined,
     columnSpan: colSpan,
-    shading: fill ? { fill, type: ShadingType.CLEAR, color: 'auto' } : undefined,
+    shading: fill ? { fill } : undefined,
     borders: standardBorder,
     verticalAlign: vAlign,
     margins: {
@@ -226,9 +223,9 @@ function createStyledCell(
 }
 
 /**
- * Builds the official 3-column CBSJC header table.
+ * Builds the official 3-column CBSJC header table for Rubrics documents.
  */
-function buildHeaderTable(logoBuffer: Buffer | null): Table {
+function buildRubricsHeaderTable(logoBuffer: Buffer | null): Table {
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     rows: [
@@ -274,7 +271,7 @@ function buildHeaderTable(logoBuffer: Buffer | null): Table {
                 ],
           }),
 
-          // Column 2: Institution & Planning Book Title
+          // Column 2: Document Header Title
           new TableCell({
             width: { size: 56, type: WidthType.PERCENTAGE },
             borders: standardBorder,
@@ -286,20 +283,20 @@ function buildHeaderTable(logoBuffer: Buffer | null): Table {
                   new TextRun({
                     text: 'COLEGIO BILINGÜE SAN JOSÉ CAMPESTRE\n',
                     bold: true,
-                    size: 19, // 9.5pt
+                    size: 19,
                     color: COLOR_PRIMARY_NAVY,
                     font: 'Calibri',
                   }),
                   new TextRun({
-                    text: 'PLANNING BOOK PRIMARY & SECONDARY\n',
+                    text: 'MATRIZ DE RÚBRICAS & MENÚ DE DESAFÍOS\n',
                     bold: true,
-                    size: 17, // 8.5pt
+                    size: 17,
                     color: COLOR_CBSJC_RED,
                     font: 'Calibri',
                   }),
                   new TextRun({
-                    text: 'Secuencia didáctica · Sistema Institucional de Arquitectura Pedagógica (SIAP)',
-                    size: 14, // 7pt
+                    text: 'Sistema Institucional de Evaluación de los Aprendizajes (SIEE / SIAP)',
+                    size: 14,
                     color: COLOR_TEXT_MUTED,
                     font: 'Calibri',
                   }),
@@ -320,7 +317,7 @@ function buildHeaderTable(logoBuffer: Buffer | null): Table {
               new Paragraph({
                 children: [
                   new TextRun({
-                    text: 'CÓDIGO: SJB-RGA006\n',
+                    text: 'CÓDIGO: SJB-RGA-RUB\n',
                     bold: true,
                     size: 15,
                     color: COLOR_PRIMARY_NAVY,
@@ -377,9 +374,9 @@ function buildHeaderTable(logoBuffer: Buffer | null): Table {
 }
 
 /**
- * Builds the official 3-column Institutional Signatures table.
+ * Builds the official 3-column Signatures table for rubrics document.
  */
-function buildSignaturesTable(authorName: string, grado: string): Table {
+function buildRubricsSignaturesTable(authorName: string, grado: string): Table {
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     rows: [
@@ -425,8 +422,8 @@ function buildSignaturesTable(authorName: string, grado: string): Table {
           createStyledCell(
             [
               '_____________________________',
-              'Líder de Área / Coordinación de Subciclo',
-              'Comité Curricular y Pedagógico',
+              'Líder de Área / Coordinación Pedagógica',
+              'Comité de Evaluación y Calidad',
               'Colegio Bilingüe San José Campestre',
             ],
             { align: AlignmentType.CENTER, size: 16, width: 34 }
@@ -447,232 +444,23 @@ function buildSignaturesTable(authorName: string, grado: string): Table {
 }
 
 /**
- * Formats table rows according to CBSJC section fidelity rules.
+ * Builds high-fidelity rubrics tables with column widths and band styles.
  */
-function formatTableByContext(rawRows: string[][], sectionContext: string): Table {
+function formatRubricTable(rawRows: string[][]): Table {
   if (rawRows.length === 0) {
     return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [] })
   }
 
   const numCols = Math.max(...rawRows.map((r) => r.length))
 
-  // 1. Signatures Table (ELABORÓ | REVISÓ | APROBÓ)
-  if (
-    numCols === 3 &&
-    rawRows[0].some((c) => /ELABOR[OÓ]/i.test(c)) &&
-    rawRows[0].some((c) => /REVIS[OÓ]/i.test(c))
-  ) {
-    const rows = rawRows.map((row, rIdx) => {
-      const isHeader = rIdx === 0
-      return new TableRow({
-        children: row.map((cellText, cIdx) =>
-          createStyledCell(cellText, {
-            bold: isHeader,
-            fill: isHeader ? COLOR_SHADING_LIGHT : undefined,
-            color: isHeader ? COLOR_DARK_NAVY : COLOR_TEXT_DARK,
-            align: AlignmentType.CENTER,
-            width: cIdx === 1 ? 34 : 33,
-            size: isHeader ? 18 : 16,
-          })
-        ),
-      })
-    })
-    return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })
-  }
-
-  // 2. 2-Column Key-Value Metadata / Referentes / Bitácora Table
-  if (numCols === 2) {
-    const isFirstRowHeader =
-      /referente|identificaci[oó]n|aspecto|campo/i.test(rawRows[0][0]) &&
-      /contenido|detalle|registro|articulaci[oó]n/i.test(rawRows[0][1])
-
-    const rows = rawRows.map((row, rIdx) => {
-      const isHeaderRow = rIdx === 0 && isFirstRowHeader
-      const col1Text = row[0] || ''
-      const col2Text = row[1] || ''
-
-      if (isHeaderRow) {
-        return new TableRow({
-          children: [
-            createStyledCell(col1Text, {
-              bold: true,
-              fill: COLOR_PRIMARY_NAVY,
-              color: COLOR_TEXT_WHITE,
-              width: 28,
-              size: 18,
-            }),
-            createStyledCell(col2Text, {
-              bold: true,
-              fill: COLOR_PRIMARY_NAVY,
-              color: COLOR_TEXT_WHITE,
-              width: 72,
-              size: 18,
-            }),
-          ],
-        })
-      }
-
-      return new TableRow({
-        children: [
-          createStyledCell(col1Text, {
-            bold: true,
-            fill: COLOR_SHADING_LIGHT,
-            color: COLOR_DARK_NAVY,
-            width: 28,
-            size: 17,
-          }),
-          createStyledCell(col2Text, {
-            width: 72,
-            size: 17,
-            color: COLOR_TEXT_DARK,
-          }),
-        ],
-      })
-    })
-
-    return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })
-  }
-
-  // 3. 3-Column Moments Table (ANTES | DURANTE | DESPUÉS)
-  if (
-    numCols === 3 &&
-    (/arco|pedag[oó]gico|momento/i.test(sectionContext) ||
-      rawRows.some((r) => /ANTES|DURANTE|DESPU[EÉ]S/i.test(r[0])))
-  ) {
-    const rows = rawRows.map((row, rIdx) => {
-      const isHeader = rIdx === 0 && /momento|fase/i.test(row[0])
-      const momentLabel = row[0] || ''
-      const subTitle = row[1] || ''
-      const content = row[2] || ''
-
-      if (isHeader) {
-        return new TableRow({
-          children: [
-            createStyledCell(momentLabel, {
-              bold: true,
-              fill: COLOR_PRIMARY_NAVY,
-              color: COLOR_TEXT_WHITE,
-              width: 16,
-              size: 18,
-            }),
-            createStyledCell(subTitle, {
-              bold: true,
-              fill: COLOR_PRIMARY_NAVY,
-              color: COLOR_TEXT_WHITE,
-              width: 26,
-              size: 18,
-            }),
-            createStyledCell(content, {
-              bold: true,
-              fill: COLOR_PRIMARY_NAVY,
-              color: COLOR_TEXT_WHITE,
-              width: 58,
-              size: 18,
-            }),
-          ],
-        })
-      }
-
-      return new TableRow({
-        children: [
-          createStyledCell(momentLabel, {
-            bold: true,
-            fill: COLOR_PRIMARY_NAVY,
-            color: COLOR_TEXT_WHITE,
-            align: AlignmentType.CENTER,
-            width: 16,
-            size: 18,
-          }),
-          createStyledCell(subTitle, {
-            bold: true,
-            fill: COLOR_SHADING_LIGHT,
-            color: COLOR_DARK_NAVY,
-            width: 26,
-            size: 17,
-          }),
-          createStyledCell(content, {
-            width: 58,
-            size: 17,
-            color: COLOR_TEXT_DARK,
-          }),
-        ],
-      })
-    })
-
-    return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })
-  }
-
-  // 4. 3-Column Pilares Table (Pilar | Competencia | Manifestación)
-  if (
-    numCols === 3 &&
-    (/pilar/i.test(sectionContext) || rawRows.some((r) => /SABER/i.test(r[0])))
-  ) {
-    const rows = rawRows.map((row, rIdx) => {
-      const isHeader = rIdx === 0
-      if (isHeader) {
-        return new TableRow({
-          children: [
-            createStyledCell(row[0] || 'Pilar Institucional', {
-              bold: true,
-              fill: COLOR_PRIMARY_NAVY,
-              color: COLOR_TEXT_WHITE,
-              width: 20,
-              size: 18,
-            }),
-            createStyledCell(row[1] || 'Competencia Institucional', {
-              bold: true,
-              fill: COLOR_PRIMARY_NAVY,
-              color: COLOR_TEXT_WHITE,
-              width: 35,
-              size: 18,
-            }),
-            createStyledCell(row[2] || 'Manifestación en la Evidencia', {
-              bold: true,
-              fill: COLOR_PRIMARY_NAVY,
-              color: COLOR_TEXT_WHITE,
-              width: 45,
-              size: 18,
-            }),
-          ],
-        })
-      }
-
-      return new TableRow({
-        children: [
-          createStyledCell(row[0] || '', {
-            bold: true,
-            fill: COLOR_SHADING_LIGHT,
-            color: COLOR_DARK_NAVY,
-            width: 20,
-            size: 17,
-          }),
-          createStyledCell(row[1] || '', {
-            width: 35,
-            size: 17,
-            color: COLOR_TEXT_DARK,
-          }),
-          createStyledCell(row[2] || '', {
-            width: 45,
-            size: 17,
-            color: COLOR_TEXT_DARK,
-          }),
-        ],
-      })
-    })
-
-    return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })
-  }
-
-  // 5. 5-Column Table: Rubrics (Menú de Desafíos) or Evaluation Plan
+  // 5-Column Rubric Matrix (Criterio / Sin categoría / Bronze / Silver / Gold)
   if (numCols === 5) {
-    const isRubric = rawRows[0].some((c) => /bronze|silver|gold|sin categor/i.test(c))
-    const colWidths = isRubric ? [18, 20, 21, 21, 20] : [25, 15, 18, 14, 28]
-
+    const colWidths = [18, 20, 21, 21, 20]
     const rows = rawRows.map((row, rIdx) => {
       const isHeader = rIdx === 0
       return new TableRow({
         children: row.map((colText, cIdx) => {
-          const width = colWidths[cIdx] || Math.floor(100 / numCols)
+          const width = colWidths[cIdx] || 20
 
           if (isHeader) {
             return createStyledCell(colText, {
@@ -681,7 +469,7 @@ function formatTableByContext(rawRows: string[][], sectionContext: string): Tabl
               color: COLOR_TEXT_WHITE,
               width,
               size: 17,
-              align: cIdx > 0 && isRubric ? AlignmentType.CENTER : AlignmentType.LEFT,
+              align: cIdx > 0 ? AlignmentType.CENTER : AlignmentType.LEFT,
             })
           }
 
@@ -704,7 +492,34 @@ function formatTableByContext(rawRows: string[][], sectionContext: string): Tabl
     return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })
   }
 
-  // 6. Generic Table Default (N columns)
+  // 2-Column Key-Value or Criteria Table
+  if (numCols === 2) {
+    const rows = rawRows.map((row, rIdx) => {
+      const isHeader = rIdx === 0 && /criterio|dimensi[oó]n|aspecto/i.test(row[0])
+      return new TableRow({
+        children: [
+          createStyledCell(row[0] || '', {
+            bold: true,
+            fill: isHeader ? COLOR_PRIMARY_NAVY : COLOR_SHADING_LIGHT,
+            color: isHeader ? COLOR_TEXT_WHITE : COLOR_DARK_NAVY,
+            width: 30,
+            size: 17,
+          }),
+          createStyledCell(row[1] || '', {
+            bold: isHeader,
+            fill: isHeader ? COLOR_PRIMARY_NAVY : undefined,
+            color: isHeader ? COLOR_TEXT_WHITE : COLOR_TEXT_DARK,
+            width: 70,
+            size: 17,
+          }),
+        ],
+      })
+    })
+
+    return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows })
+  }
+
+  // Fallback generic table
   const colWidth = Math.floor(100 / numCols)
   const rows = rawRows.map((row, rIdx) => {
     const isHeader = rIdx === 0
@@ -712,16 +527,10 @@ function formatTableByContext(rawRows: string[][], sectionContext: string): Tabl
       children: row.map((colText, cIdx) =>
         createStyledCell(colText, {
           bold: isHeader,
-          fill: isHeader
-            ? COLOR_PRIMARY_NAVY
-            : cIdx === 0
-            ? COLOR_SHADING_LIGHT
-            : rIdx % 2 === 1
-            ? COLOR_TEXT_WHITE
-            : COLOR_SHADING_ZEBRA,
+          fill: isHeader ? COLOR_PRIMARY_NAVY : cIdx === 0 ? COLOR_SHADING_LIGHT : undefined,
           color: isHeader ? COLOR_TEXT_WHITE : cIdx === 0 ? COLOR_DARK_NAVY : COLOR_TEXT_DARK,
           width: colWidth,
-          size: isHeader ? 18 : 17,
+          size: 17,
         })
       ),
     })
@@ -731,13 +540,13 @@ function formatTableByContext(rawRows: string[][], sectionContext: string): Tabl
 }
 
 /**
- * Main export function to generate high-fidelity DOCX planning books.
+ * Main export function to generate standalone DOCX rubrics document.
  */
-export async function generateDocx(params: GenerateDocxParams): Promise<Buffer> {
+export async function generateRubricsDocx(params: GenerateRubricsDocxParams): Promise<Buffer> {
   const { title, content, metadata } = params
 
   if (!content || content.trim().length === 0) {
-    throw new Error('generateDocx: document content must not be empty.')
+    throw new Error('generateRubricsDocx: document content must not be empty.')
   }
 
   try {
@@ -747,7 +556,7 @@ export async function generateDocx(params: GenerateDocxParams): Promise<Buffer> 
       logoBuffer = fs.readFileSync(logoPath)
     }
 
-    const headerTable = buildHeaderTable(logoBuffer)
+    const headerTable = buildRubricsHeaderTable(logoBuffer)
     const bodyElements: (Paragraph | Table)[] = []
 
     // 1. Document Title Banner
@@ -755,7 +564,7 @@ export async function generateDocx(params: GenerateDocxParams): Promise<Buffer> 
       new Paragraph({
         children: [
           new TextRun({
-            text: 'Secuencia Didáctica: Antes — Durante — Después · Subciclos 3 a 6',
+            text: 'MATRIZ DE RÚBRICAS EVALUATIVAS: MENÚ DE DESAFÍOS & CRITERIOS ANALÍTICOS',
             bold: true,
             size: 24, // 12pt
             color: COLOR_DARK_NAVY,
@@ -767,12 +576,8 @@ export async function generateDocx(params: GenerateDocxParams): Promise<Buffer> 
       })
     )
 
-    // Check if the markdown starts with an identification table or if we should inject one
-    const lines = content.split('\n')
-    const hasMarkdownIdentTable =
-      lines.slice(0, 15).some((l) => /Docente\(s\)|Área \/ Asignatura|Grado \/ Grupo/i.test(l))
-
-    if (!hasMarkdownIdentTable && metadata) {
+    // 2. Metadata Identification Box
+    if (metadata) {
       bodyElements.push(
         new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
@@ -803,40 +608,40 @@ export async function generateDocx(params: GenerateDocxParams): Promise<Buffer> 
             }),
             new TableRow({
               children: [
-                createStyledCell('Grado / Grupo', {
-                  bold: true,
-                  width: 25,
-                  fill: COLOR_SHADING_LIGHT,
-                  color: COLOR_DARK_NAVY,
-                }),
-                createStyledCell(metadata.grado || 'Grado 6°', { width: 75 }),
-              ],
-            }),
-            new TableRow({
-              children: [
-                createStyledCell('Período / Subciclo', {
+                createStyledCell('Grado / Subciclo', {
                   bold: true,
                   width: 25,
                   fill: COLOR_SHADING_LIGHT,
                   color: COLOR_DARK_NAVY,
                 }),
                 createStyledCell(
-                  `Periodo ${metadata.periodo || 'I'} (Año Lectivo 2026) / Subciclos 3 a 6`,
+                  `${metadata.grado || 'Grado 6°'} • Periodo ${metadata.periodo || 'I'} (Año Lectivo 2026)`,
                   { width: 75 }
                 ),
               ],
             }),
             new TableRow({
               children: [
-                createStyledCell('Fecha(s) / Semanas', {
+                createStyledCell('Evidencia Principal / Tema', {
+                  bold: true,
+                  width: 25,
+                  fill: COLOR_SHADING_LIGHT,
+                  color: COLOR_DARK_NAVY,
+                }),
+                createStyledCell(title.replace(/^R[uú]bricas\s*:\s*/i, ''), { width: 75 }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                createStyledCell('Escala Institucional SIEE', {
                   bold: true,
                   width: 25,
                   fill: COLOR_SHADING_LIGHT,
                   color: COLOR_DARK_NAVY,
                 }),
                 createStyledCell(
-                  `Bloque de 4 Semanas (Sesiones de 90 min) • Generado: ${metadata.date}`,
-                  { width: 75 }
+                  'Sin categoría (1,0 – 3,9) • Bronze (4,0 – 4,5) • Silver (4,6 – 4,7) • Gold (4,8 – 5,0)',
+                  { width: 75, bold: true, color: COLOR_PRIMARY_NAVY }
                 ),
               ],
             }),
@@ -846,16 +651,14 @@ export async function generateDocx(params: GenerateDocxParams): Promise<Buffer> 
       bodyElements.push(new Paragraph({ text: '', spacing: { before: 100, after: 100 } }))
     }
 
-    // Process markdown sections, paragraphs, bullet lists, code blocks, and tables
+    // Process markdown sections & tables
+    const lines = content.split('\n')
     let currentTableRows: string[][] = []
     let inTable = false
-    let currentSectionContext = ''
-    let inCodeBlock = false
-    let codeBlockLines: string[] = []
 
     const flushTable = () => {
       if (currentTableRows.length > 0) {
-        const table = formatTableByContext(currentTableRows, currentSectionContext)
+        const table = formatRubricTable(currentTableRows)
         bodyElements.push(table)
         bodyElements.push(new Paragraph({ text: '', spacing: { after: 120 } }))
         currentTableRows = []
@@ -863,53 +666,11 @@ export async function generateDocx(params: GenerateDocxParams): Promise<Buffer> 
       }
     }
 
-    const flushCodeBlock = () => {
-      if (codeBlockLines.length > 0) {
-        const textContent = codeBlockLines.join('\n')
-        bodyElements.push(
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            rows: [
-              new TableRow({
-                children: [
-                  createStyledCell(textContent, {
-                    fill: COLOR_SHADING_CONTAINER,
-                    color: COLOR_DARK_NAVY,
-                    size: 16,
-                  }),
-                ],
-              }),
-            ],
-          })
-        )
-        bodyElements.push(new Paragraph({ text: '', spacing: { after: 100 } }))
-        codeBlockLines = []
-        inCodeBlock = false
-      }
-    }
-
     for (let i = 0; i < lines.length; i++) {
       const rawLine = lines[i]
       const line = rawLine.trim()
 
-      // Handle code block fences ```text or ```
-      if (line.startsWith('```')) {
-        if (inCodeBlock) {
-          flushCodeBlock()
-        } else {
-          if (inTable) flushTable()
-          inCodeBlock = true
-          codeBlockLines = []
-        }
-        continue
-      }
-
-      if (inCodeBlock) {
-        codeBlockLines.push(rawLine)
-        continue
-      }
-
-      // Markdown Table Line Detection
+      // Table line detection
       if (line.startsWith('|') && line.endsWith('|')) {
         if (/^\|[\s\-:|]+\|$/.test(line)) {
           continue
@@ -925,24 +686,13 @@ export async function generateDocx(params: GenerateDocxParams): Promise<Buffer> 
         flushTable()
       }
 
-      // Skip empty lines
       if (!line) {
-        continue
-      }
-
-      // Skip redundant markdown title if it duplicates the banner
-      if (
-        (line.startsWith('# ') || line.startsWith('**Secuencia')) &&
-        /Secuencia Did[aá]ctica/i.test(line) &&
-        i < 5
-      ) {
         continue
       }
 
       // Headings
       if (line.startsWith('# ')) {
         const hText = line.substring(2).replace(/\*\*/g, '').trim()
-        currentSectionContext = hText
         bodyElements.push(
           new Paragraph({
             children: [
@@ -960,7 +710,6 @@ export async function generateDocx(params: GenerateDocxParams): Promise<Buffer> 
         )
       } else if (line.startsWith('## ')) {
         const hText = line.substring(3).replace(/\*\*/g, '').trim()
-        currentSectionContext = hText
         bodyElements.push(
           new Paragraph({
             children: [
@@ -1045,26 +794,20 @@ export async function generateDocx(params: GenerateDocxParams): Promise<Buffer> 
       }
     }
 
-    if (inCodeBlock) {
-      flushCodeBlock()
-    }
     if (inTable) {
       flushTable()
     }
 
-    // Append institutional signatures table if not already present
-    const hasSignatures = lines.some((l) => /ELABOR[OÓ].*REVIS[OÓ].*APROB[OÓ]/i.test(l))
-    if (!hasSignatures) {
-      bodyElements.push(new Paragraph({ text: '', spacing: { before: 200, after: 80 } }))
-      bodyElements.push(
-        buildSignaturesTable(
-          metadata.authorName || 'Docente Titular CBSJC',
-          metadata.grado || 'Grado 6°'
-        )
+    // Append institutional signatures table
+    bodyElements.push(new Paragraph({ text: '', spacing: { before: 200, after: 80 } }))
+    bodyElements.push(
+      buildRubricsSignaturesTable(
+        metadata.authorName || 'Docente Titular CBSJC',
+        metadata.grado || 'Grado 6°'
       )
-    }
+    )
 
-    // Build the Official Document
+    // Build Document
     const doc = new Document({
       sections: [
         {
@@ -1089,7 +832,7 @@ export async function generateDocx(params: GenerateDocxParams): Promise<Buffer> 
                 new Paragraph({
                   children: [
                     new TextRun({
-                      text: 'Colegio Bilingüe San José Campestre • Formato Oficial SJB-RGA006 • Página ',
+                      text: 'Colegio Bilingüe San José Campestre • Matriz Oficial SJB-RGA-RUB • Página ',
                       size: 15,
                       color: COLOR_TEXT_MUTED,
                       font: 'Calibri',
@@ -1128,9 +871,9 @@ export async function generateDocx(params: GenerateDocxParams): Promise<Buffer> 
     const buffer = await Packer.toBuffer(doc)
     return buffer
   } catch (error) {
-    console.error('Error generating DOCX:', error)
+    console.error('Error generating Rubrics DOCX:', error)
     throw new Error(
-      `DOCX generation failed: ${error instanceof Error ? error.message : String(error)}`
+      `Rubrics DOCX generation failed: ${error instanceof Error ? error.message : String(error)}`
     )
   }
 }

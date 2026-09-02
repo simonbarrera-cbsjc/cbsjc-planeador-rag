@@ -17,6 +17,7 @@ import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { generatePdf } from '@/lib/export/pdf'
 import { generateDocx } from '@/lib/export/docx'
+import { generateRubricsDocx } from '@/lib/export/rubrics-docx'
 import { generateGradeSpreadsheet } from '@/lib/export/excel'
 import { createDeliverablesZip } from '@/lib/export/zip'
 import { createGoogleDoc } from '@/lib/export/gdocs'
@@ -195,10 +196,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // 3. Rubrics Word .docx Export
     if (format === 'rubrics_docx') {
-      const rubricsDocxBuffer = await generateDocx({
+      const rubricsDocxBuffer = await generateRubricsDocx({
         title: `Rúbricas Evaluativas: ${doc.title}`,
         content: rubricsMarkdown,
-        documentType: 'planeador',
         language: doc.language as 'es' | 'en',
         metadata: {
           area: doc.area,
@@ -257,10 +257,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           language: doc.language as 'es' | 'en',
           metadata: { area: doc.area, nivel: doc.nivel, grado: doc.grado || undefined, periodo: doc.periodo || undefined, date: formattedDate, authorName },
         }),
-        generateDocx({
+        generateRubricsDocx({
           title: `Rúbricas Menú de Desafíos: ${doc.title}`,
           content: rubricsMarkdown,
-          documentType: 'planeador',
           language: doc.language as 'es' | 'en',
           metadata: { area: doc.area, nivel: doc.nivel, grado: doc.grado || undefined, periodo: doc.periodo || undefined, date: formattedDate, authorName },
         }),
