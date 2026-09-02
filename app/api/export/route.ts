@@ -242,15 +242,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // 5. Complete ZIP Package with all 4 Deliverables (Planning Book DOCX & PDF, Rubrics DOCX, Excel Planilla)
     if (format === 'zip') {
-      const [planningDocxBuf, planningPdfBuf, rubricsDocxBuf, excelBuf] = await Promise.all([
-        generateDocx({
+      let planningPdfBuf: Buffer | undefined = undefined
+      try {
+        planningPdfBuf = await generatePdf({
           title: doc.title,
           content: planningMarkdown,
           documentType: 'planeador',
           language: doc.language as 'es' | 'en',
           metadata: { area: doc.area, nivel: doc.nivel, grado: doc.grado || undefined, periodo: doc.periodo || undefined, date: formattedDate, authorName },
-        }),
-        generatePdf({
+        })
+      } catch (pdfErr) {
+        console.warn('[POST /api/export] PDF generation omitted from ZIP due to renderer limitation:', pdfErr)
+      }
+
+      const [planningDocxBuf, rubricsDocxBuf, excelBuf] = await Promise.all([
+        generateDocx({
           title: doc.title,
           content: planningMarkdown,
           documentType: 'planeador',

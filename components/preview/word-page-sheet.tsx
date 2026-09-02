@@ -38,24 +38,28 @@ function cleanAndFormatHtml(text: string | undefined | null): string {
   if (!text) return ''
   let s = String(text).trim()
 
-  // 1. Convert <br> or <br/> tags to actual line break
+  // 1. Strip leading hashes (e.g. ###, ####, #####, ######) from text content
+  s = s.replace(/^#{1,6}\s*/, '')
+
+  // 2. Convert <br> or <br/> tags to actual line break
   s = s.replace(/<br\s*\/?>/gi, '<br />')
 
-  // 2. Bold italic: ***text*** or **_text_**
+  // 3. Bold italic: ***text*** or **_text_**
   s = s.replace(/\*\*\*(.*?)\*\*\*/g, '<strong class="text-[#0E1B4D] font-bold"><em>$1</em></strong>')
   s = s.replace(/\*\*_(.*?)_\*\*/g, '<strong class="text-[#0E1B4D] font-bold"><em>$1</em></strong>')
 
-  // 3. Bold: **text**
+  // 4. Bold: **text**
   s = s.replace(/\*\*(.*?)\*\*/g, '<strong class="text-[#0E1B4D] font-bold">$1</strong>')
 
-  // 4. Italic: *text* (avoiding remaining double asterisks)
+  // 5. Italic: *text* (avoiding remaining double asterisks)
   s = s.replace(/(^|[^*])\*([^*]+?)\*([^*]|$)/g, '$1<em>$2</em>$3')
 
-  // 5. Italic with underscores: _text_
+  // 6. Italic with underscores: _text_
   s = s.replace(/(^|[^_])_([^_]+?)_([^_]|$)/g, '$1<em>$2</em>$3')
 
-  // 6. Remove any leftover loose asterisks so they NEVER appear to the teacher
+  // 7. Remove any leftover loose asterisks and hashes so they NEVER appear to the user
   s = s.replace(/\*/g, '')
+  s = s.replace(/#{2,}/g, '')
 
   return s
 }

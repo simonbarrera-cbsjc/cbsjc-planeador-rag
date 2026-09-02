@@ -146,11 +146,11 @@ export function parseMarkdownToBlocks(markdown: string): DocumentBlock[] {
         type: 'h3',
         content: line.substring(4).trim(),
       })
-    } else if (line.startsWith('#### ')) {
+    } else if (line.startsWith('###### ') || line.startsWith('##### ') || line.startsWith('#### ')) {
       blocks.push({
         id: uid(),
         type: 'h4',
-        content: line.substring(5).trim(),
+        content: line.replace(/^#{4,6}\s*/, '').trim(),
       })
     } else if (line.startsWith('- ') || line.startsWith('* ')) {
       blocks.push({

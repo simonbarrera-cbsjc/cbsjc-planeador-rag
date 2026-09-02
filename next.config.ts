@@ -59,6 +59,13 @@ const nextConfig: NextConfig = {
     ],
   },
   serverExternalPackages: ['pdf-parse', '@react-pdf/renderer', 'mammoth', 'tesseract.js'],
+  outputFileTracingIncludes: {
+    '/**': [
+      './node_modules/pdfkit/js/standard-fonts/**/*',
+      './node_modules/pdfkit/js/data/**/*',
+      './public/fonts/**/*',
+    ],
+  },
   async headers() {
     return [
       {
