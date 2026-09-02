@@ -56,32 +56,36 @@ const BORDER = '#CBD5E1'
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 35,
-    paddingBottom: 45,
-    paddingHorizontal: 40,
+    paddingTop: 65,
+    paddingBottom: 40,
+    paddingHorizontal: 35,
     fontSize: 9,
     fontFamily: 'Roboto',
     color: '#1E293B',
     backgroundColor: '#FFFFFF',
-    lineHeight: 1.4,
+    lineHeight: 1.35,
   },
   headerBox: {
+    position: 'absolute' as const,
+    top: 15,
+    left: 35,
+    right: 35,
+    height: 42,
     borderWidth: 1,
     borderColor: '#94A3B8',
-    marginBottom: 12,
     flexDirection: 'row' as const,
   },
   headerColLeft: {
-    width: '18%',
-    padding: 8,
+    width: '16%',
+    padding: 4,
     borderRightWidth: 1,
     borderRightColor: '#94A3B8',
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
   },
   headerColCenter: {
-    width: '56%',
-    padding: 6,
+    width: '58%',
+    padding: 4,
     borderRightWidth: 1,
     borderRightColor: '#94A3B8',
     justifyContent: 'center' as const,
@@ -90,20 +94,20 @@ const styles = StyleSheet.create({
   },
   headerColRight: {
     width: '26%',
-    padding: 6,
+    padding: 4,
     justifyContent: 'center' as const,
     backgroundColor: GRAY_BG,
   },
   titleMain: {
     fontFamily: 'Roboto',
-    fontSize: 9.5,
+    fontSize: 8.5,
     fontWeight: 'bold' as const,
     color: NAVY,
     textAlign: 'center' as const,
   },
   titleSub: {
     fontFamily: 'Roboto',
-    fontSize: 8.5,
+    fontSize: 7.5,
     fontWeight: 'bold' as const,
     color: RED,
     textAlign: 'center' as const,
@@ -111,86 +115,85 @@ const styles = StyleSheet.create({
   },
   titleDesc: {
     fontFamily: 'Roboto',
-    fontSize: 7,
+    fontSize: 6.5,
     color: '#64748B',
     textAlign: 'center' as const,
-    marginTop: 1,
   },
   codeText: {
     fontFamily: 'Roboto',
-    fontSize: 7.5,
+    fontSize: 7,
     color: NAVY,
     fontWeight: 'bold' as const,
   },
   subCodeText: {
     fontFamily: 'Roboto',
-    fontSize: 7,
+    fontSize: 6.5,
     color: '#64748B',
     marginTop: 1,
   },
   h1: {
     fontFamily: 'Roboto',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold' as const,
     color: NAVY,
-    marginTop: 10,
-    marginBottom: 4,
+    marginTop: 8,
+    marginBottom: 3,
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
     paddingBottom: 2,
   },
   h2: {
     fontFamily: 'Roboto',
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: 'bold' as const,
     color: NAVY,
-    marginTop: 8,
+    marginTop: 7,
     marginBottom: 3,
   },
   h3: {
     fontFamily: 'Roboto',
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: 'bold' as const,
     color: RED,
-    marginTop: 6,
+    marginTop: 5,
     marginBottom: 2,
   },
   paragraph: {
     fontFamily: 'Roboto',
-    fontSize: 8.5,
-    marginBottom: 4,
+    fontSize: 8,
+    marginBottom: 3,
     textAlign: 'justify' as const,
-    lineHeight: 1.35,
+    lineHeight: 1.3,
   },
   bulletItem: {
     flexDirection: 'row' as const,
     marginBottom: 2,
-    paddingLeft: 8,
+    paddingLeft: 6,
   },
   bulletDot: {
-    width: 10,
+    width: 8,
     color: RED,
     fontWeight: 'bold' as const,
-    fontSize: 9,
+    fontSize: 8,
   },
   bulletText: {
     fontFamily: 'Roboto',
     flex: 1,
-    fontSize: 8.5,
-    lineHeight: 1.35,
+    fontSize: 8,
+    lineHeight: 1.3,
   },
   table: {
     width: '100%',
     borderWidth: 0.5,
     borderColor: BORDER,
-    marginVertical: 4,
+    marginVertical: 3,
   },
   tableHeaderRow: {
     flexDirection: 'row' as const,
     backgroundColor: NAVY,
   },
   tableHeaderCell: {
-    padding: 4,
+    padding: 3,
     borderRightWidth: 0.5,
     borderRightColor: '#334155',
   },
@@ -198,7 +201,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Roboto',
     color: '#FFFFFF',
     fontWeight: 'bold' as const,
-    fontSize: 7.5,
+    fontSize: 7,
   },
   tableRow: {
     flexDirection: 'row' as const,
@@ -212,27 +215,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   tableCell: {
-    padding: 4,
+    padding: 3,
     borderRightWidth: 0.5,
     borderRightColor: '#E2E8F0',
   },
   tableCellKey: {
-    padding: 4,
+    padding: 3,
     backgroundColor: GRAY_BG,
     borderRightWidth: 0.5,
     borderRightColor: BORDER,
   },
   footer: {
     position: 'absolute' as const,
-    bottom: 20,
-    left: 40,
-    right: 40,
+    bottom: 15,
+    left: 35,
+    right: 35,
     flexDirection: 'row' as const,
     justifyContent: 'space-between' as const,
     alignItems: 'center' as const,
     borderTopWidth: 0.5,
     borderTopColor: BORDER,
-    paddingTop: 4,
+    paddingTop: 3,
   },
   footerText: {
     fontFamily: 'Roboto',
@@ -241,22 +244,32 @@ const styles = StyleSheet.create({
   },
 })
 
-// ── Rich text rendering (bold, italic, normal spans) ──
-function renderRichText(text: string, baseFontSize = 8.5): React.ReactNode[] {
-  if (!text) return []
+// ── Rich text rendering (bold, italic, normal spans) with zero nulls ──
+function renderRichText(text: string, baseFontSize = 8): React.ReactNode {
+  if (!text || typeof text !== 'string') return ''
   const clean = text
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/^#{1,6}\s*/, '')
+    .trim()
+
+  if (!clean) return ''
+
+  if (!clean.includes('*') && !clean.includes('_')) {
+    return clean
+  }
 
   const parts = clean.split(/(\*\*\*.*?\*\*\*|___.*?___|\*\*.*?\*\*|__.*?__|\*.*?\*|_.*?_)/g)
 
-  return parts.map((part, i) => {
-    if (!part) return null
+  const nodes: React.ReactNode[] = []
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]
+    if (!part || part.length === 0) continue
+
     if (
       (part.startsWith('***') && part.endsWith('***') && part.length >= 6) ||
       (part.startsWith('___') && part.endsWith('___') && part.length >= 6)
     ) {
-      return (
+      nodes.push(
         <Text
           key={i}
           style={{
@@ -270,12 +283,11 @@ function renderRichText(text: string, baseFontSize = 8.5): React.ReactNode[] {
           {part.slice(3, -3)}
         </Text>
       )
-    }
-    if (
+    } else if (
       (part.startsWith('**') && part.endsWith('**') && part.length >= 4) ||
       (part.startsWith('__') && part.endsWith('__') && part.length >= 4)
     ) {
-      return (
+      nodes.push(
         <Text
           key={i}
           style={{
@@ -288,12 +300,11 @@ function renderRichText(text: string, baseFontSize = 8.5): React.ReactNode[] {
           {part.slice(2, -2)}
         </Text>
       )
-    }
-    if (
+    } else if (
       (part.startsWith('*') && part.endsWith('*') && part.length >= 2) ||
       (part.startsWith('_') && part.endsWith('_') && part.length >= 2)
     ) {
-      return (
+      nodes.push(
         <Text
           key={i}
           style={{
@@ -305,13 +316,12 @@ function renderRichText(text: string, baseFontSize = 8.5): React.ReactNode[] {
           {part.slice(1, -1)}
         </Text>
       )
+    } else {
+      nodes.push(part)
     }
-    return (
-      <Text key={i} style={{ fontFamily: 'Roboto', fontSize: baseFontSize }}>
-        {part}
-      </Text>
-    )
-  })
+  }
+
+  return nodes.length === 1 ? nodes[0] : nodes
 }
 
 interface GeneratePdfParams {
@@ -367,7 +377,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
           ))}
         </View>
 
-        {/* Table Data Rows - individual rows wrap={false} so rows stay intact across page breaks */}
+        {/* Table Data Rows */}
         {dataRows.map((r, ri) => (
           <View
             key={ri}
@@ -384,7 +394,9 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
                     : { width: colWidthPct },
                 ]}
               >
-                <Text>{renderRichText(c.trim(), 7.5)}</Text>
+                <Text style={{ fontSize: 7, fontFamily: 'Roboto' }}>
+                  {renderRichText(c.trim(), 7)}
+                </Text>
               </View>
             ))}
           </View>
@@ -438,7 +450,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
       )
     } else if (line.startsWith('#### ') || line.startsWith('##### ') || line.startsWith('###### ')) {
       elements.push(
-        <Text key={elementKey++} style={[styles.h3, { color: NAVY, fontSize: 8.5 }]}>
+        <Text key={elementKey++} style={[styles.h3, { color: NAVY, fontSize: 8 }]}>
           {line.replace(/^#{4,6}\s*/, '').replace(/\*\*/g, '').trim()}
         </Text>
       )
@@ -447,7 +459,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
         <View key={elementKey++} style={styles.bulletItem} wrap={false}>
           <Text style={styles.bulletDot}>•</Text>
           <Text style={styles.bulletText}>
-            {renderRichText(line.substring(2).trim(), 8.5)}
+            {renderRichText(line.substring(2).trim(), 8)}
           </Text>
         </View>
       )
@@ -456,7 +468,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
     } else {
       elements.push(
         <Text key={elementKey++} style={styles.paragraph}>
-          {renderRichText(line, 8.5)}
+          {renderRichText(line, 8)}
         </Text>
       )
     }
@@ -471,10 +483,10 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
   const pdfDoc = (
     <Document title={title} author={safeDocente}>
       <Page size="A4" style={styles.page}>
-        {/* Fixed Header Table */}
+        {/* Fixed Header Table - Positioned Absolutely */}
         <View style={styles.headerBox} fixed>
           <View style={styles.headerColLeft}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: 'bold', color: NAVY }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: 'bold', color: NAVY }}>
               CBSJC
             </Text>
           </View>
@@ -485,8 +497,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
           </View>
           <View style={styles.headerColRight}>
             <Text style={styles.codeText}>CÓDIGO: SJB-RGA006</Text>
-            <Text style={styles.subCodeText}>VERSIÓN: 4</Text>
-            <Text style={styles.subCodeText}>VIGENCIA: 2026</Text>
+            <Text style={styles.subCodeText}>VERSIÓN: 4  VIGENCIA: 2026</Text>
           </View>
         </View>
 
