@@ -186,30 +186,59 @@ NOMBRE (instrumento): ... · DESCRIPCIÓN: Pregunta de sentido: ... · DBA: ... 
 Genera la secuencia completa con la máxima profundidad pedagógica y rigor bilingüe del CBSJC.`
 }
 
+const CANDIDATE_MODELS = [
+  'gemini-3.7-flash',
+  'gemini-3.5-flash',
+  'gemini-3.6-flash',
+  'gemini-flash-latest',
+  'gemini-3.1-flash-lite',
+]
+
 export async function generatePlanningDocument(
   params: GeneratePlanningParams
 ): Promise<GeneratedPlanningOutput> {
   const genAI = getGenAIClient()
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    generationConfig: {
-      temperature: 0.3,
-      topP: 0.95,
-      maxOutputTokens: 8192,
-    },
-  })
-
   const prompt = buildOfficialPrompt(params)
 
-  try {
-    const result = await model.generateContent(prompt)
-    const response = await result.response
-    const fullText = response.text()
+  let lastError: Error | null = null
+  let fullText = ''
 
-    if (!fullText || fullText.trim().length === 0) {
-      throw new Error('Gemini retornó una respuesta vacía al generar la secuencia.')
+  for (const modelName of CANDIDATE_MODELS) {
+    try {
+      console.log(`[generator] Attempting generation with model: ${modelName}...`)
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: {
+          temperature: 0.3,
+          topP: 0.95,
+          maxOutputTokens: 8192,
+        },
+      })
+
+      const result = await model.generateContent(prompt)
+      const response = await result.response
+      fullText = response.text()
+
+      if (fullText && fullText.trim().length > 0) {
+        console.log(`[generator] Successfully generated content using ${modelName}`)
+        break
+      }
+    } catch (error) {
+      console.warn(`[generator] Model ${modelName} failed:`, error instanceof Error ? error.message : error)
+      lastError = error instanceof Error ? error : new Error(String(error))
+      // Continue to next candidate model
     }
+  }
 
+  if (!fullText || fullText.trim().length === 0) {
+    throw new Error(
+      `No se pudo generar la secuencia pedagógica con ningún modelo disponible. Último error: ${
+        lastError?.message || 'Respuesta vacía'
+      }`
+    )
+  }
+
+  try {
     // Extract sections for separate tab rendering
     let rubricsMarkdown = ''
     let cibercolegiosSnippet = ''
@@ -250,7 +279,8 @@ export async function generatePlanningDocument(
       excelSpec,
     }
   } catch (error) {
-    console.error('Error in generatePlanningDocument:', error)
-    throw new Error(`Error en la generación con IA: ${error instanceof Error ? error.message : String(error)}`)
+    console.error('Error processing generated output:', error)
+    throw new Error(`Error en el procesamiento del resultado: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
+

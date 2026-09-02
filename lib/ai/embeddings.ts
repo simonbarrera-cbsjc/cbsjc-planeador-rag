@@ -8,7 +8,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 
 // Constants
 
-const EMBEDDING_MODEL = 'text-embedding-004'
+const EMBEDDING_MODELS = ['gemini-embedding-001', 'gemini-embedding-2']
 const MAX_INPUT_CHARS = 2000
 const BATCH_SIZE = 20
 const BATCH_DELAY_MS = 100
@@ -30,35 +30,39 @@ function getClient(): GoogleGenerativeAI {
 // Internal retry helper
 
 async function embedWithRetry(text: string, attempt = 1): Promise<number[]> {
-  try {
-    const client = getClient()
-    const model = client.getGenerativeModel({ model: EMBEDDING_MODEL })
-    const result = await model.embedContent(text)
+  const client = getClient()
+  let lastError: unknown = null
 
-    const values = result.embedding?.values
-    if (!values || values.length === 0) {
-      throw new Error('generateEmbedding: API returned an empty embedding vector.')
+  for (const modelName of EMBEDDING_MODELS) {
+    try {
+      const model = client.getGenerativeModel({ model: modelName })
+      const result = await model.embedContent(text)
+
+      const values = result.embedding?.values
+      if (values && values.length > 0) {
+        return values
+      }
+    } catch (err: unknown) {
+      lastError = err
     }
-
-    return values
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    const isRateLimitOrTransient =
-      message.includes('429') ||
-      message.includes('RESOURCE_EXHAUSTED') ||
-      message.includes('503') ||
-      message.includes('overloaded') ||
-      message.includes('fetch failed')
-
-    if (isRateLimitOrTransient && attempt < MAX_RETRIES) {
-      const backoffMs = Math.pow(2, attempt) * 500 // 1000ms, 2000ms
-      console.warn(`[embeddings] Transient error (attempt ${attempt}/${MAX_RETRIES}): ${message}. Retrying in ${backoffMs}ms...`)
-      await delay(backoffMs)
-      return embedWithRetry(text, attempt + 1)
-    }
-
-    throw new Error(`generateEmbedding failed: ${message}`)
   }
+
+  const message = lastError instanceof Error ? lastError.message : String(lastError)
+  const isRateLimitOrTransient =
+    message.includes('429') ||
+    message.includes('RESOURCE_EXHAUSTED') ||
+    message.includes('503') ||
+    message.includes('overloaded') ||
+    message.includes('fetch failed')
+
+  if (isRateLimitOrTransient && attempt < MAX_RETRIES) {
+    const backoffMs = Math.pow(2, attempt) * 500
+    console.warn(`[embeddings] Transient error (attempt ${attempt}/${MAX_RETRIES}): ${message}. Retrying in ${backoffMs}ms...`)
+    await delay(backoffMs)
+    return embedWithRetry(text, attempt + 1)
+  }
+
+  throw new Error(`generateEmbedding failed: ${message}`)
 }
 
 // Public API
