@@ -19,16 +19,13 @@ if (typeof window !== 'undefined') {
 // Disable hyphenation to prevent word break glitches in serverless
 Font.registerHyphenationCallback((word) => [word])
 
-// Register fonts using local files bundled with the deployment.
-// In Vercel serverless, process.cwd() => /var/task, and public/ is at /var/task/public/
-// We use path.join to construct paths that work in both local dev and Vercel.
+// Register complete Roboto font family (Normal, Bold, Italic, BoldItalic)
 const fontDir = path.join(process.cwd(), 'public', 'fonts')
 const regularFontPath = path.join(fontDir, 'Roboto-Regular.ttf')
 const boldFontPath = path.join(fontDir, 'Roboto-Bold.ttf')
 const italicFontPath = path.join(fontDir, 'Roboto-Italic.ttf')
 const boldItalicFontPath = path.join(fontDir, 'Roboto-BoldItalic.ttf')
 
-// Check if local fonts exist. If yes, register from file. Otherwise, use CDN as fallback.
 const regularSrc = fs.existsSync(regularFontPath)
   ? regularFontPath
   : 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-regular-webfont.ttf'
@@ -193,9 +190,12 @@ const styles = StyleSheet.create({
     backgroundColor: NAVY,
   },
   tableHeaderCell: {
-    fontFamily: 'Roboto',
-    flex: 1,
     padding: 4,
+    borderRightWidth: 0.5,
+    borderRightColor: '#334155',
+  },
+  tableHeaderCellText: {
+    fontFamily: 'Roboto',
     color: '#FFFFFF',
     fontWeight: 'bold' as const,
     fontSize: 7.5,
@@ -212,19 +212,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   tableCell: {
-    fontFamily: 'Roboto',
-    flex: 1,
     padding: 4,
-    fontSize: 7.5,
-    color: '#334155',
+    borderRightWidth: 0.5,
+    borderRightColor: '#E2E8F0',
   },
   tableCellKey: {
-    fontFamily: 'Roboto',
-    flex: 1,
     padding: 4,
-    fontSize: 7.5,
-    color: NAVY,
-    fontWeight: 'bold' as const,
     backgroundColor: GRAY_BG,
     borderRightWidth: 0.5,
     borderRightColor: BORDER,
@@ -248,8 +241,9 @@ const styles = StyleSheet.create({
   },
 })
 
-// ── Rich text rendering (bold, italic, bold-italic + normal spans) ──
+// ── Rich text rendering (bold, italic, normal spans) ──
 function renderRichText(text: string, baseFontSize = 8.5): React.ReactNode[] {
+  if (!text) return []
   const clean = text
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/^#{1,6}\s*/, '')
@@ -257,6 +251,7 @@ function renderRichText(text: string, baseFontSize = 8.5): React.ReactNode[] {
   const parts = clean.split(/(\*\*\*.*?\*\*\*|___.*?___|\*\*.*?\*\*|__.*?__|\*.*?\*|_.*?_)/g)
 
   return parts.map((part, i) => {
+    if (!part) return null
     if (
       (part.startsWith('***') && part.endsWith('***') && part.length >= 6) ||
       (part.startsWith('___') && part.endsWith('___') && part.length >= 6)
@@ -348,33 +343,45 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
     const headers = tableRows[0] || []
     const dataRows = tableRows.slice(1)
     const isTwoCol = headers.length === 2
+    const numCols = headers.length || 1
+    const colWidthPct = `${(100 / numCols).toFixed(2)}%`
 
     const rendered = (
-      <View key={`tbl-${key}`} style={styles.table} wrap={false}>
-        <View style={styles.tableHeaderRow}>
+      <View key={`tbl-${key}`} style={styles.table}>
+        {/* Table Header */}
+        <View style={styles.tableHeaderRow} wrap={false}>
           {headers.map((h, ci) => (
-            <Text
+            <View
               key={ci}
               style={[
                 styles.tableHeaderCell,
-                isTwoCol && ci === 0 ? { flex: 0.4 } : {},
+                isTwoCol
+                  ? { width: ci === 0 ? '28%' : '72%' }
+                  : { width: colWidthPct },
               ]}
             >
-              {h.replace(/\*\*/g, '').trim()}
-            </Text>
+              <Text style={styles.tableHeaderCellText}>
+                {h.replace(/\*\*/g, '').trim()}
+              </Text>
+            </View>
           ))}
         </View>
+
+        {/* Table Data Rows - individual rows wrap={false} so rows stay intact across page breaks */}
         {dataRows.map((r, ri) => (
           <View
             key={ri}
             style={ri % 2 === 0 ? styles.tableRow : styles.tableRowAlt}
+            wrap={false}
           >
             {r.map((c, ci) => (
               <View
                 key={ci}
                 style={[
                   isTwoCol && ci === 0 ? styles.tableCellKey : styles.tableCell,
-                  isTwoCol && ci === 0 ? { flex: 0.4 } : {},
+                  isTwoCol
+                    ? { width: ci === 0 ? '28%' : '72%' }
+                    : { width: colWidthPct },
                 ]}
               >
                 <Text>{renderRichText(c.trim(), 7.5)}</Text>
@@ -394,7 +401,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
     const rawLine = lines[i]
     const line = rawLine.trim()
 
-    // Table line
+    // Table line detection
     if (line.startsWith('|') && line.endsWith('|')) {
       if (/^\|[\s\-:|]+\|$/.test(line)) continue
       const cells = line
@@ -437,7 +444,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
       )
     } else if (line.startsWith('- ') || line.startsWith('* ')) {
       elements.push(
-        <View key={elementKey++} style={styles.bulletItem}>
+        <View key={elementKey++} style={styles.bulletItem} wrap={false}>
           <Text style={styles.bulletDot}>•</Text>
           <Text style={styles.bulletText}>
             {renderRichText(line.substring(2).trim(), 8.5)}
@@ -455,7 +462,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
     }
   }
 
-  // Flush remaining table
+  // Flush any remaining table
   if (tableRows.length > 0) {
     const tbl = flushTable(elementKey++)
     if (tbl) elements.push(tbl)
@@ -464,7 +471,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
   const pdfDoc = (
     <Document title={title} author={safeDocente}>
       <Page size="A4" style={styles.page}>
-        {/* Header Table */}
+        {/* Fixed Header Table */}
         <View style={styles.headerBox} fixed>
           <View style={styles.headerColLeft}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: 'bold', color: NAVY }}>
