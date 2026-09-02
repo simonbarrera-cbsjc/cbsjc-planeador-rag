@@ -1,33 +1,8 @@
-import 'server-only'
 import PDFDocument from 'pdfkit'
+import fs from 'fs'
+import path from 'path'
 
-if (typeof window !== 'undefined') {
-  throw new Error('lib/export/pdf.tsx must only be used on the server.')
-}
-
-interface GeneratePdfParams {
-  title: string
-  content: string
-  documentType?: string
-  language?: 'es' | 'en'
-  metadata: {
-    area?: string
-    nivel?: string
-    grado?: string
-    periodo?: string
-    date: string
-    authorName?: string
-  }
-}
-
-/**
- * Generates the official CBSJC Planning Book (SJB-RGA006) in PDF using PDFKit.
- * Eliminates all Yoga Flexbox layout overflows and guarantees 100% stability across 30+ page documents.
- */
-export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
-  const { title, content, metadata } = params
-  const safeDocente = metadata.authorName || 'Docente Titular CBSJC'
-
+async function generatePdfWithPdfKit(title, content, metadata) {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({
@@ -37,15 +12,14 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
         autoFirstPage: true,
         info: {
           Title: title,
-          Author: safeDocente,
-          Subject: 'Planning Book SJB-RGA006 CBSJC',
+          Author: metadata.authorName || 'Docente CBSJC',
         },
       })
 
-      const buffers: Buffer[] = []
-      doc.on('data', (chunk: Buffer) => buffers.push(chunk))
+      const buffers = []
+      doc.on('data', (chunk) => buffers.push(chunk))
       doc.on('end', () => resolve(Buffer.concat(buffers)))
-      doc.on('error', (err) => reject(err))
+      doc.on('error', reject)
 
       const PAGE_WIDTH = 595.28
       const PAGE_HEIGHT = 841.89
@@ -63,7 +37,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
         const height = 40
         doc.save()
         doc.rect(MARGIN, top, CONTENT_WIDTH, height).lineWidth(0.75).stroke(COLOR_BORDER)
-
+        
         // Left Column (Crest placeholder)
         doc.rect(MARGIN, top, 80, height).lineWidth(0.5).stroke(COLOR_BORDER)
         doc.font('Helvetica-Bold').fontSize(11).fillColor(COLOR_NAVY)
@@ -89,9 +63,10 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
         doc.restore()
       }
 
+      // Start y position below header
       let currentY = 70
 
-      const checkPageBreak = (neededHeight: number) => {
+      const checkPageBreak = (neededHeight) => {
         if (currentY + neededHeight > PAGE_HEIGHT - 45) {
           doc.addPage()
           drawHeader()
@@ -101,27 +76,17 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
 
       drawHeader()
 
-      const cleanText = (str: string) => {
-        return str
-          .replace(/<br\s*\/?>/gi, '\n')
-          .replace(/\*\*\*(.*?)\*\*\*/g, '$1')
-          .replace(/\*\*(.*?)\*\*/g, '$1')
-          .replace(/\*(.*?)\*/g, '$1')
-          .replace(/_{1,3}(.*?)_{1,3}/g, '$1')
-          .trim()
-      }
-
       const lines = content.split('\n')
-      let tableRows: string[][] = []
+      let tableRows = []
 
-      const renderTable = (rows: string[][]) => {
+      const renderTable = (rows) => {
         if (!rows || rows.length === 0) return
         const headers = rows[0] || []
         const dataRows = rows.slice(1)
         const isTwoCol = headers.length === 2
         const numCols = headers.length || 1
 
-        const colWidths: number[] = []
+        const colWidths = []
         for (let c = 0; c < numCols; c++) {
           if (isTwoCol) {
             colWidths.push(c === 0 ? CONTENT_WIDTH * 0.28 : CONTENT_WIDTH * 0.72)
@@ -130,12 +95,13 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
           }
         }
 
-        const getRowHeight = (cells: string[], isHeader = false) => {
+        // Measure row height
+        const getRowHeight = (cells, isHeader = false) => {
           let maxHeight = 16
           cells.forEach((cell, ci) => {
             const w = colWidths[ci] || 50
             doc.font(isHeader ? 'Helvetica-Bold' : 'Helvetica').fontSize(7)
-            const textH = doc.heightOfString(cleanText(cell), { width: w - 8 })
+            const textH = doc.heightOfString(cell.replace(/\*\*/g, '').replace(/<br\s*\/?>/gi, '\n'), { width: w - 8 })
             if (textH + 8 > maxHeight) maxHeight = textH + 8
           })
           return maxHeight
@@ -151,7 +117,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
         headers.forEach((h, ci) => {
           const w = colWidths[ci]
           doc.font('Helvetica-Bold').fontSize(7).fillColor('#FFFFFF')
-          doc.text(cleanText(h), curX + 4, currentY + 4, { width: w - 8, align: 'left' })
+          doc.text(h.replace(/\*\*/g, ''), curX + 4, currentY + 4, { width: w - 8, align: 'left' })
           curX += w
         })
         doc.restore()
@@ -178,7 +144,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
             } else {
               doc.font('Helvetica').fontSize(7).fillColor(COLOR_TEXT)
             }
-            doc.text(cleanText(c), rowX + 4, currentY + 4, { width: w - 8, align: 'left' })
+            doc.text(c.replace(/\*\*/g, '').replace(/<br\s*\/?>/gi, '\n'), rowX + 4, currentY + 4, { width: w - 8, align: 'left' })
             rowX += w
           })
           doc.restore()
@@ -208,30 +174,27 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
 
         if (line.startsWith('# ')) {
           checkPageBreak(25)
-          const text = cleanText(line.substring(2))
           doc.font('Helvetica-Bold').fontSize(11).fillColor(COLOR_NAVY)
-          doc.text(text, MARGIN, currentY, { width: CONTENT_WIDTH })
-          currentY += doc.heightOfString(text, { width: CONTENT_WIDTH }) + 5
+          doc.text(line.substring(2).replace(/\*\*/g, ''), MARGIN, currentY, { width: CONTENT_WIDTH })
+          currentY += doc.heightOfString(line.substring(2).replace(/\*\*/g, ''), { width: CONTENT_WIDTH }) + 5
         } else if (line.startsWith('## ')) {
           checkPageBreak(20)
-          const text = cleanText(line.substring(3))
           doc.font('Helvetica-Bold').fontSize(10).fillColor(COLOR_NAVY)
-          doc.text(text, MARGIN, currentY, { width: CONTENT_WIDTH })
-          currentY += doc.heightOfString(text, { width: CONTENT_WIDTH }) + 4
+          doc.text(line.substring(3).replace(/\*\*/g, ''), MARGIN, currentY, { width: CONTENT_WIDTH })
+          currentY += doc.heightOfString(line.substring(3).replace(/\*\*/g, ''), { width: CONTENT_WIDTH }) + 4
         } else if (line.startsWith('### ')) {
           checkPageBreak(18)
-          const text = cleanText(line.substring(4))
           doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLOR_RED)
-          doc.text(text, MARGIN, currentY, { width: CONTENT_WIDTH })
-          currentY += doc.heightOfString(text, { width: CONTENT_WIDTH }) + 3
+          doc.text(line.substring(4).replace(/\*\*/g, ''), MARGIN, currentY, { width: CONTENT_WIDTH })
+          currentY += doc.heightOfString(line.substring(4).replace(/\*\*/g, ''), { width: CONTENT_WIDTH }) + 3
         } else if (line.startsWith('#### ') || line.startsWith('##### ') || line.startsWith('###### ')) {
           checkPageBreak(16)
-          const text = cleanText(line.replace(/^#{4,6}\s*/, ''))
           doc.font('Helvetica-Bold').fontSize(8).fillColor(COLOR_NAVY)
+          const text = line.replace(/^#{4,6}\s*/, '').replace(/\*\*/g, '')
           doc.text(text, MARGIN, currentY, { width: CONTENT_WIDTH })
           currentY += doc.heightOfString(text, { width: CONTENT_WIDTH }) + 3
         } else if (line.startsWith('- ') || line.startsWith('* ')) {
-          const bulletContent = cleanText(line.substring(2))
+          const bulletContent = line.substring(2).replace(/\*\*/g, '')
           doc.font('Helvetica').fontSize(8)
           const textH = doc.heightOfString(bulletContent, { width: CONTENT_WIDTH - 15 })
           checkPageBreak(textH + 2)
@@ -239,7 +202,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
           doc.font('Helvetica').fontSize(8).fillColor(COLOR_TEXT).text(bulletContent, MARGIN + 14, currentY, { width: CONTENT_WIDTH - 14 })
           currentY += textH + 2
         } else {
-          const text = cleanText(line)
+          const text = line.replace(/\*\*/g, '')
           doc.font('Helvetica').fontSize(8)
           const textH = doc.heightOfString(text, { width: CONTENT_WIDTH })
           checkPageBreak(textH + 3)
@@ -260,7 +223,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
         doc.save()
         doc.rect(MARGIN, PAGE_HEIGHT - 26, CONTENT_WIDTH, 0.5).fill(COLOR_BORDER)
         doc.font('Helvetica').fontSize(6.5).fillColor('#94A3B8')
-        doc.text(`Colegio Bilingüe San José Campestre • Formato SJB-RGA006 • Docente: ${safeDocente}`, MARGIN, PAGE_HEIGHT - 20, { width: CONTENT_WIDTH * 0.75, align: 'left' })
+        doc.text(`Colegio Bilingüe San José Campestre • Formato SJB-RGA006 • Docente: ${metadata.authorName || 'Docente CBSJC'}`, MARGIN, PAGE_HEIGHT - 20, { width: CONTENT_WIDTH * 0.75, align: 'left' })
         doc.text(`Pág. ${p + 1} de ${range.count}`, MARGIN + CONTENT_WIDTH * 0.75, PAGE_HEIGHT - 20, { width: CONTENT_WIDTH * 0.25, align: 'right' })
         doc.restore()
       }
@@ -271,3 +234,24 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
     }
   })
 }
+
+// Test generating a 35-page document with massive tables!
+let testMarkdown = `# 1. REFERENTES DE CALIDAD INSTITUCIONAL\n\n| Referente | Detalle Curricular Exhaustivo |\n|---|---|\n`
+for (let i = 1; i <= 35; i++) {
+  testMarkdown += `| **Referente ${i}** | Descripción exhaustiva para la fila ${i} de la malla curricular del CBSJC, integrando competencias, estándares de calidad EBC, derechos básicos de aprendizaje (DBA), metas del subciclo, componente ACE bilingüe con vocabulario técnico en inglés y articulación con el proyecto transversal PRAE en Tienda Nueva. |\n`
+}
+testMarkdown += `\n## 2. ARCO PEDAGÓGICO DE LA SECUENCIA\n`
+for (let s = 1; s <= 20; s++) {
+  testMarkdown += `### Sesión ${s}: Profundización y Trabajo en Aula\n- **Momento 1:** Activación cognitiva mediante rutina See-Think-Wonder en el campus campestre.\n- **Momento 2:** Trabajo práctico con registro sistemático de observaciones en la bitácora escolar.\n- **Momento 3:** Cierre reflexivo con Ticket de Salida y sentence frames en inglés.\n\n`
+}
+
+console.log('Generating massive PDF with PDFKit...')
+generatePdfWithPdfKit('Planeacion Oficial CBSJC', testMarkdown, { authorName: 'Manolito Pérez' })
+  .then((buf) => {
+    console.log(`SUCCESS! Generated PDF buffer size: ${buf.length} bytes`)
+    fs.writeFileSync(path.join(process.cwd(), 'scripts', 'test-pdfkit-massive.pdf'), buf)
+    console.log('Saved to scripts/test-pdfkit-massive.pdf')
+  })
+  .catch((err) => {
+    console.error('FAILED:', err)
+  })
