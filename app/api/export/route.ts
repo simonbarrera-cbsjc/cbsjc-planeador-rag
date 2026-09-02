@@ -118,6 +118,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Parse structured payload if stored as JSON
   let planningMarkdown = doc.content
   let rubricsMarkdown = doc.content
+  let cibercolegiosSnippet = ''
   let excelSpec = {
     docente: authorName,
     area: doc.area || 'General',
@@ -131,6 +132,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (parsedPayload.planningBookMarkdown) {
       planningMarkdown = parsedPayload.planningBookMarkdown
       rubricsMarkdown = parsedPayload.rubricsMarkdown || parsedPayload.planningBookMarkdown
+      cibercolegiosSnippet = parsedPayload.cibercolegiosSnippet || ''
       excelSpec = parsedPayload.excelSpec || excelSpec
     }
   } catch {
@@ -159,7 +161,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       const storagePath = `${user.id}/${documentId}/${safeTitle}-planning.pdf`
       const { signedUrl } = await uploadAndSign(storagePath, pdfBuffer, 'application/pdf')
-      return NextResponse.json({ success: true, downloadUrl: signedUrl })
+      const successResponse = NextResponse.json({ success: true, downloadUrl: signedUrl })
+      return addRateLimitHeaders(successResponse, rateLimitResult)
     }
 
     // 2. Word .docx Export (Planning Book)
@@ -185,7 +188,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         docxBuffer,
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       )
-      return NextResponse.json({ success: true, downloadUrl: signedUrl })
+      const successResponse = NextResponse.json({ success: true, downloadUrl: signedUrl })
+      return addRateLimitHeaders(successResponse, rateLimitResult)
     }
 
     // 3. Rubrics Word .docx Export
@@ -211,7 +215,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         rubricsDocxBuffer,
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       )
-      return NextResponse.json({ success: true, downloadUrl: signedUrl })
+      const successResponse = NextResponse.json({ success: true, downloadUrl: signedUrl })
+      return addRateLimitHeaders(successResponse, rateLimitResult)
     }
 
     // 4. Excel .xlsx Grade Spreadsheet
@@ -230,7 +235,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         excelBuffer,
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       )
-      return NextResponse.json({ success: true, downloadUrl: signedUrl })
+      const successResponse = NextResponse.json({ success: true, downloadUrl: signedUrl })
+      return addRateLimitHeaders(successResponse, rateLimitResult)
     }
 
     // 5. Complete ZIP Package with all 3 Deliverables
@@ -272,11 +278,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         planningPdf: planningPdfBuf,
         rubricsDocx: rubricsDocxBuf,
         excelSpreadsheet: excelBuf,
+        cibercolegiosTxt: cibercolegiosSnippet,
       })
 
       const storagePath = `${user.id}/${documentId}/${safeTitle}-paquete-completo.zip`
       const { signedUrl } = await uploadAndSign(storagePath, zipBuffer, 'application/zip')
-      return NextResponse.json({ success: true, downloadUrl: signedUrl })
+      const successResponse = NextResponse.json({ success: true, downloadUrl: signedUrl })
+      return addRateLimitHeaders(successResponse, rateLimitResult)
     }
 
     return NextResponse.json({ success: false, error: 'Formato no soportado' }, { status: 400 })

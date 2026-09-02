@@ -155,3 +155,106 @@ export function markdownToHtml(markdown: string): string {
 
   return processedLines.join('')
 }
+
+/**
+ * Normalizes academic period inputs into a valid 'I' | 'II' | 'III' | 'IV' enum.
+ * Handles inputs like 'Periodo I', 'Periodo II', '1', '2°', 'Primer Periodo', etc.
+ */
+export function normalizePeriodo(raw: string | null | undefined): Periodo {
+  if (!raw) return 'I'
+  const val = raw.trim().toUpperCase()
+
+  // Exact uppercase match
+  if (val === 'I' || val === 'II' || val === 'III' || val === 'IV') {
+    return val as Periodo
+  }
+
+  // Check in reverse roman / numerical order to avoid substring prefix collisions
+  if (/\bIV\b|CUARTO|4/i.test(val)) return 'IV'
+  if (/\bIII\b|TERCER|3/i.test(val)) return 'III'
+  if (/\bII\b|SEGUNDO|2/i.test(val)) return 'II'
+  if (/\bI\b|PRIMER|1/i.test(val)) return 'I'
+
+  return 'I'
+}
+
+/**
+ * Normalizes subject area strings into valid database enum slugs.
+ * Maps verbose UI labels (e.g. 'Ciencias Naturales y Educación Ambiental') to 'ciencias'.
+ */
+export function normalizeArea(raw: string | null | undefined): DocumentArea {
+  if (!raw) return 'general'
+  const val = raw.trim().toLowerCase()
+
+  const validSlugs: DocumentArea[] = [
+    'matematicas',
+    'ciencias',
+    'humanidades',
+    'ingles',
+    'sociales',
+    'artes',
+    'educacion_fisica',
+    'tecnologia',
+    'religion',
+    'general',
+  ]
+
+  if (validSlugs.includes(val as DocumentArea)) {
+    return val as DocumentArea
+  }
+
+  if (val.includes('matem') || val.includes('geom') || val.includes('algebra') || val.includes('calculo')) {
+    return 'matematicas'
+  }
+  if (val.includes('social') || val.includes('historia') || val.includes('democrac') || val.includes('filosof') || val.includes('politic')) {
+    return 'sociales'
+  }
+  if (val.includes('cienc') || val.includes('natural') || val.includes('ambient') || val.includes('biolog') || val.includes('quimic') || (val.includes('fisic') && !val.includes('educacion') && !val.includes('deport'))) {
+    return 'ciencias'
+  }
+  if (val.includes('lengua') || val.includes('castell') || val.includes('humanid') || val.includes('espanol') || val.includes('español') || val.includes('literat')) {
+    return 'humanidades'
+  }
+  if (val.includes('ingl') || val.includes('english') || val.includes('bilingual')) {
+    return 'ingles'
+  }
+  if (val.includes('art') || val.includes('music') || val.includes('danz') || val.includes('teatro') || val.includes('cultur')) {
+    return 'artes'
+  }
+  if (val.includes('fisic') || val.includes('deport') || val.includes('recreac') || val.includes('ed_fisica') || val.includes('educacion fisica')) {
+    return 'educacion_fisica'
+  }
+  if (val.includes('tecno') || val.includes('inform') || val.includes('comput') || val.includes('programac') || val.includes('robot')) {
+    return 'tecnologia'
+  }
+  if (val.includes('relig') || val.includes('etic') || val.includes('valor') || val.includes('pastoral') || val.includes('espirit')) {
+    return 'religion'
+  }
+
+  return 'general'
+}
+
+/**
+ * Normalizes educational level (nivel) against database constraint.
+ * Infers category from grade string if raw nivel is unspecified.
+ */
+export function normalizeNivel(rawNivel?: string | null, rawGrado?: string | null): DocumentCategory {
+  const n = (rawNivel || '').trim().toLowerCase()
+  if (n === 'primaria' || n === 'secundaria' || n === 'bachillerato' || n === 'general') {
+    return n as DocumentCategory
+  }
+
+  const g = (rawGrado || '').trim().toLowerCase()
+  if (g.includes('10') || g.includes('11') || g.includes('bachillerato') || g.includes('media')) {
+    return 'bachillerato'
+  }
+  if (g.includes('6') || g.includes('7') || g.includes('8') || g.includes('9') || g.includes('secundaria')) {
+    return 'secundaria'
+  }
+  if (g.includes('transicion') || g.includes('transición') || g.includes('preescolar') || g.includes('jardin') || g.includes('jardín') || g.includes('1') || g.includes('2') || g.includes('3') || g.includes('4') || g.includes('5') || g.includes('primaria')) {
+    return 'primaria'
+  }
+
+  return 'general'
+}
+

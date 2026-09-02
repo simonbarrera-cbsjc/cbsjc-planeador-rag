@@ -7,10 +7,16 @@ export interface ZipPackageParams {
   planningPdf?: Buffer
   rubricsDocx?: Buffer
   excelSpreadsheet?: Buffer
+  cibercolegiosTxt?: string
 }
 
 /**
  * Packages all generated deliverables into a single zip file for the teacher.
+ * Includes:
+ * 1. Planning Book (SJB-RGA006) in DOCX & PDF
+ * 2. Rubrics Matrix in DOCX
+ * 3. Automated Excel Grade Spreadsheet (.xlsx)
+ * 4. Cibercolegios copy-paste snippet (.txt)
  */
 export async function createDeliverablesZip(params: ZipPackageParams): Promise<Buffer> {
   const zip = new JSZip()
@@ -21,11 +27,11 @@ export async function createDeliverablesZip(params: ZipPackageParams): Promise<B
   const folder = zip.folder(`CBSJC_${cleanTitle}`) || zip
 
   if (params.planningDocx) {
-    folder.file(`1_Planning_Book_${cleanTitle}.docx`, params.planningDocx)
+    folder.file(`1_Planning_Book_SJB-RGA006_${cleanTitle}.docx`, params.planningDocx)
   }
 
   if (params.planningPdf) {
-    folder.file(`1_Planning_Book_${cleanTitle}.pdf`, params.planningPdf)
+    folder.file(`1_Planning_Book_SJB-RGA006_${cleanTitle}.pdf`, params.planningPdf)
   }
 
   if (params.rubricsDocx) {
@@ -36,6 +42,10 @@ export async function createDeliverablesZip(params: ZipPackageParams): Promise<B
     folder.file(`3_Planilla_Notas_${cleanTitle}.xlsx`, params.excelSpreadsheet)
   }
 
+  if (params.cibercolegiosTxt && params.cibercolegiosTxt.trim().length > 0) {
+    folder.file(`4_Traslado_Cibercolegios_${cleanTitle}.txt`, params.cibercolegiosTxt.trim())
+  }
+
   const content = await zip.generateAsync({
     type: 'nodebuffer',
     compression: 'DEFLATE',
@@ -44,3 +54,4 @@ export async function createDeliverablesZip(params: ZipPackageParams): Promise<B
 
   return content
 }
+

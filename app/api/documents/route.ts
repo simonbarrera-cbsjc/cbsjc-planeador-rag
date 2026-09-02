@@ -11,6 +11,12 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import type { DocumentArea, DocumentCategory, SourceDocumentStatus } from '@/types'
+import {
+  rateLimit,
+  RATE_LIMIT_PRESETS,
+  createRateLimitResponse,
+  addRateLimitHeaders,
+} from '@/lib/security/rate-limit'
 
 const STORAGE_BUCKET = 'source-documents'
 
@@ -50,6 +56,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
   }
 
+  const rateLimitResult = rateLimit(request, RATE_LIMIT_PRESETS.default, user.id)
+  if (!rateLimitResult.success) {
+    return createRateLimitResponse(
+      rateLimitResult,
+      `Has excedido el límite de consultas (${RATE_LIMIT_PRESETS.default.limit} por minuto). Por favor espera ${rateLimitResult.retryAfterSeconds} segundos.`
+    )
+  }
+
   const { searchParams } = new URL(request.url)
   const rawParams = {
     category: searchParams.get('category') || undefined,
@@ -86,7 +100,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     )
   }
 
-  return NextResponse.json({ success: true, documents: documents || [] }, { status: 200 })
+  const successResponse = NextResponse.json({ success: true, documents: documents || [] }, { status: 200 })
+  return addRateLimitHeaders(successResponse, rateLimitResult)
 }
 
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
@@ -98,6 +113,14 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
 
   if (authError || !user) {
     return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+  }
+
+  const rateLimitResult = rateLimit(request, RATE_LIMIT_PRESETS.upload, user.id)
+  if (!rateLimitResult.success) {
+    return createRateLimitResponse(
+      rateLimitResult,
+      `Has excedido el límite de solicitudes. Por favor espera ${rateLimitResult.retryAfterSeconds} segundos.`
+    )
   }
 
   const { searchParams } = new URL(request.url)
@@ -114,12 +137,28 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
 
   const { data: doc, error: fetchError } = await supabaseAdmin
     .from('source_documents')
-    .select('id, storage_path')
+    .select('id, storage_path, user_id')
     .eq('id', id)
     .single()
 
   if (fetchError || !doc) {
     return NextResponse.json({ success: false, error: 'Documento no encontrado' }, { status: 404 })
+  }
+
+  // IDOR Protection: Verify ownership or admin role
+  if (doc.user_id !== user.id) {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.role !== 'admin') {
+      return NextResponse.json(
+        { success: false, error: 'No tienes permisos para eliminar este documento' },
+        { status: 403 }
+      )
+    }
   }
 
   try {
@@ -144,7 +183,8 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
       throw new Error(`Error al borrar registro: ${deleteError.message}`)
     }
 
-    return NextResponse.json({ success: true }, { status: 200 })
+    const successResponse = NextResponse.json({ success: true }, { status: 200 })
+    return addRateLimitHeaders(successResponse, rateLimitResult)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error al eliminar'
     console.error('[DELETE /api/documents] Error:', message)

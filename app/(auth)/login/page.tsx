@@ -4,6 +4,8 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { Header } from '@/components/header'
+import { Footer } from '@/components/footer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +26,7 @@ import {
   EyeOff,
   UserPlus,
   LogIn,
+  Layers,
 } from 'lucide-react'
 
 export default function LoginPage() {
@@ -44,17 +47,33 @@ export default function LoginPage() {
     e.preventDefault()
 
     if (honeypot) {
-      console.warn('Bot submission blocked.')
+      // Honeypot triggered: simulate processing delay without executing auth
+      setIsLoading(true)
+      await new Promise((res) => setTimeout(res, 1200))
+      setIsLoading(false)
+      toast({
+        title: 'Error de autenticación',
+        description: 'No fue posible verificar las credenciales proporcionadas.',
+        variant: 'error',
+      })
       return
     }
 
     if (!email || !email.includes('@')) {
-      toast({ title: 'Correo requerido', description: 'Por favor ingresa un correo electrónico válido.', variant: 'warning' })
+      toast({
+        title: 'Correo requerido',
+        description: 'Por favor ingresa un correo electrónico válido.',
+        variant: 'warning',
+      })
       return
     }
 
     if (!password) {
-      toast({ title: 'Contraseña requerida', description: 'Por favor ingresa tu contraseña.', variant: 'warning' })
+      toast({
+        title: 'Contraseña requerida',
+        description: 'Por favor ingresa tu contraseña.',
+        variant: 'warning',
+      })
       return
     }
 
@@ -92,22 +111,42 @@ export default function LoginPage() {
     e.preventDefault()
 
     if (honeypot) {
-      console.warn('Bot submission blocked.')
+      // Honeypot triggered: simulate processing delay without executing auth
+      setIsLoading(true)
+      await new Promise((res) => setTimeout(res, 1200))
+      setIsLoading(false)
+      toast({
+        title: 'Error de registro',
+        description: 'No fue posible completar la solicitud en este momento.',
+        variant: 'error',
+      })
       return
     }
 
     if (!fullName.trim()) {
-      toast({ title: 'Nombre requerido', description: 'Por favor ingresa tu nombre completo.', variant: 'warning' })
+      toast({
+        title: 'Nombre requerido',
+        description: 'Por favor ingresa tu nombre completo.',
+        variant: 'warning',
+      })
       return
     }
 
     if (!email || !email.includes('@')) {
-      toast({ title: 'Correo requerido', description: 'Por favor ingresa un correo válido.', variant: 'warning' })
+      toast({
+        title: 'Correo requerido',
+        description: 'Por favor ingresa un correo válido.',
+        variant: 'warning',
+      })
       return
     }
 
     if (!password || password.length < 6) {
-      toast({ title: 'Contraseña débil', description: 'La contraseña debe tener al menos 6 caracteres.', variant: 'warning' })
+      toast({
+        title: 'Contraseña débil',
+        description: 'La contraseña debe tener al menos 6 caracteres.',
+        variant: 'warning',
+      })
       return
     }
 
@@ -156,43 +195,15 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#0E1B4D] text-slate-100 flex flex-col justify-between relative overflow-hidden selection:bg-[#D71921] selection:text-white">
       {/* Background Glows with CBSJC Navy & Crimson Red */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#D71921]/25 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-1/3 -right-32 w-[32rem] h-[32rem] bg-[#162874]/70 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-32 left-1/3 w-96 h-96 bg-[#D71921]/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#D71921]/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/3 -right-32 w-[32rem] h-[32rem] bg-[#162874]/60 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 left-1/3 w-96 h-96 bg-[#A6174B]/20 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Top Header */}
-      <header className="relative z-10 w-full max-w-7xl mx-auto px-6 py-5 flex items-center justify-between border-b border-white/10">
-        <div className="flex items-center gap-3.5">
-          <div className="relative w-12 h-12 drop-shadow-md">
-            <Image
-              src="/logo.png"
-              alt="Escudo Colegio Bilingüe San José Campestre"
-              fill
-              priority
-              className="object-contain"
-            />
-          </div>
-          <div>
-            <span className="font-serif text-xs text-slate-300 block tracking-wide">
-              Colegio bilingüe
-            </span>
-            <span className="text-sm font-black tracking-tight text-white uppercase flex items-center gap-1.5">
-              <span className="text-[#D71921]">San José</span> Campestre
-            </span>
-          </div>
-        </div>
-
-        <Badge
-          variant="outline"
-          className="bg-white/5 border-white/20 text-slate-200 text-xs px-3 py-1 font-semibold flex items-center gap-1.5 backdrop-blur-md"
-        >
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
-          Sistema RAG Curricular
-        </Badge>
-      </header>
+      {/* Institutional Top Header */}
+      <Header variant="auth" />
 
       {/* Main Center Grid */}
-      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-6 py-8 lg:py-12 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-14 grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
         {/* Left Column: Pedagogical Value */}
         <div className="lg:col-span-7 space-y-7 text-left">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-md text-xs font-semibold text-slate-200">
@@ -209,7 +220,7 @@ export default function LoginPage() {
               </span>
             </h1>
             <p className="text-slate-300 text-base sm:text-lg max-w-2xl font-normal leading-relaxed">
-              Genera planeadores de clase, planes de área e informes pedagógicos con la precisión de <strong className="text-white font-semibold">Gemini 2.0 Flash</strong> y el motor <strong className="text-white font-semibold">RAG de Supabase</strong>, cumpliendo los DBA y lineamientos del CBSJC.
+              Genera en un único flujo de trabajo la secuencia didáctica <strong className="text-white font-semibold">Planning Book (SJB-RGA006)</strong>, las <strong className="text-white font-semibold">Rúbricas Evaluativas</strong> y la <strong className="text-white font-semibold">Planilla de Notas en Excel</strong> con la precisión de <strong className="text-white font-semibold">Gemini 2.0 Flash</strong> y el motor <strong className="text-white font-semibold">RAG de Supabase</strong>.
             </p>
           </div>
 
@@ -223,7 +234,7 @@ export default function LoginPage() {
                 Documentos Rectores
               </h3>
               <p className="text-[11px] text-slate-300 leading-snug">
-                Indexación automática de PDFs institucionales y planes de área.
+                Indexación de Plan de Área, SIAP institucional y Cuadernillos oficiales.
               </p>
             </div>
 
@@ -235,7 +246,7 @@ export default function LoginPage() {
                 Momentos de Clase
               </h3>
               <p className="text-[11px] text-slate-300 leading-snug">
-                Estructura DBA, inicio, desarrollo, evaluación y recursos.
+                Estructura antes-durante-después, componente ACE bilingüe y bitácora.
               </p>
             </div>
 
@@ -244,10 +255,10 @@ export default function LoginPage() {
                 <FileCheck2 className="h-4 w-4" />
               </div>
               <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                Multi-Exportación
+                Triple Entregable
               </h3>
               <p className="text-[11px] text-slate-300 leading-snug">
-                Descarga en PDF oficial con escudo, Word (.docx) o Google Docs.
+                Descarga en Word (.docx), PDF institucional y Planilla Excel (.xlsx).
               </p>
             </div>
           </div>
@@ -262,7 +273,7 @@ export default function LoginPage() {
             <div className="space-y-5 pt-1">
               {/* Card Brand Header */}
               <div className="text-center space-y-2">
-                <div className="relative w-16 h-16 mx-auto drop-shadow-md">
+                <div className="relative w-14 h-14 mx-auto drop-shadow-md">
                   <Image
                     src="/logo.png"
                     alt="Escudo Oficial CBSJC"
@@ -316,7 +327,10 @@ export default function LoginPage() {
               </div>
 
               {/* Authentication Form */}
-              <form onSubmit={mode === 'signin' ? handleSignIn : handleSignUp} className="space-y-3.5">
+              <form
+                onSubmit={mode === 'signin' ? handleSignIn : handleSignUp}
+                className="space-y-3.5"
+              >
                 {/* Honeypot anti-bot trap */}
                 <input
                   type="text"
@@ -325,6 +339,7 @@ export default function LoginPage() {
                   onChange={(e) => setHoneypot(e.target.value)}
                   tabIndex={-1}
                   autoComplete="off"
+                  aria-hidden="true"
                   className="opacity-0 absolute -left-[9999px] w-0 h-0 pointer-events-none"
                 />
 
@@ -400,7 +415,11 @@ export default function LoginPage() {
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
-                      <span>{mode === 'signin' ? 'Ingresar al Sistema' : 'Registrarse y Comenzar'}</span>
+                      <span>
+                        {mode === 'signin'
+                          ? 'Ingresar al Sistema'
+                          : 'Registrarse y Comenzar'}
+                      </span>
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
@@ -415,7 +434,7 @@ export default function LoginPage() {
                 </div>
                 <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                  <span>Cualquier correo admitido para acceso curricular</span>
+                  <span>Acceso habilitado para todo el cuerpo docente CBSJC</span>
                 </div>
               </div>
             </div>
@@ -423,13 +442,8 @@ export default function LoginPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="relative z-10 w-full max-w-7xl mx-auto px-6 py-5 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
-        <p>© {new Date().getFullYear()} Colegio Bilingüe San José Campestre. Todos los derechos reservados.</p>
-        <p className="text-slate-400">
-          Sistema de Inteligencia Artificial Curricular RAG
-        </p>
-      </footer>
+      {/* Institutional Footer */}
+      <Footer />
     </div>
   )
 }

@@ -5,13 +5,28 @@ import type { Database } from '@/types/supabase'
 const PROTECTED_PREFIXES = ['/dashboard', '/upload', '/generate', '/preview', '/history']
 const AUTH_ROUTES = ['/login']
 
+const CSP_HEADER = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com",
+  "connect-src 'self' https://*.supabase.co https://generativelanguage.googleapis.com",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "base-uri 'self'",
+].join('; ')
+
 const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'X-XSS-Protection': '1; mode=block',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), browsing-topics=()',
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
+  'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+  'Cross-Origin-Resource-Policy': 'cross-origin',
+  'Content-Security-Policy': CSP_HEADER,
 }
 
 function applySecurityHeaders(res: NextResponse): NextResponse {

@@ -1,4 +1,9 @@
+import 'server-only'
 import { createWorker } from 'tesseract.js'
+
+if (typeof window !== 'undefined') {
+  throw new Error('lib/ai/ocr-parser.ts must only be used on the server.')
+}
 
 export interface OcrResult {
   text: string
@@ -97,25 +102,23 @@ export async function ocrScannedPdfFallback(pdfBuffer: Buffer): Promise<{ text: 
   const embeddedImages = extractEmbeddedImagesFromPdf(pdfBuffer)
 
   if (embeddedImages.length === 0) {
-    // If no raw JPEG/PNG streams found, try OCR on the buffer directly
-    try {
-      const singleResult = await performOcr(pdfBuffer, 'spa+eng')
-      return { text: singleResult.text, pagesProcessed: 1 }
-    } catch {
-      return { text: '', pagesProcessed: 0 }
-    }
+    console.log('[OCR Engine] No discrete JPEG/PNG image streams found in PDF for OCR extraction.')
+    return { text: '', pagesProcessed: 0 }
   }
 
   const recognizedPages: string[] = []
 
-  for (let i = 0; i < embeddedImages.length; i++) {
+  // Limit processing to first 10 scanned pages to avoid excessive server execution times
+  const maxPagesToProcess = Math.min(embeddedImages.length, 10)
+
+  for (let i = 0; i < maxPagesToProcess; i++) {
     try {
       const pageResult = await performOcr(embeddedImages[i], 'spa+eng')
       if (pageResult.text && pageResult.text.trim().length > 10) {
         recognizedPages.push(pageResult.text.trim())
       }
     } catch (err) {
-      console.warn(`[OCR Engine] Error on scanned page ${i + 1}:`, err)
+      console.warn(`[OCR Engine] Error processing scanned page ${i + 1}:`, err)
     }
   }
 
@@ -126,3 +129,4 @@ export async function ocrScannedPdfFallback(pdfBuffer: Buffer): Promise<{ text: 
     pagesProcessed: recognizedPages.length,
   }
 }
+

@@ -1,3 +1,4 @@
+import 'server-only'
 import pdf from 'pdf-parse'
 import { ocrScannedPdfFallback } from './ocr-parser'
 

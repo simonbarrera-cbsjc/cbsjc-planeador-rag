@@ -1,4 +1,4 @@
-﻿-- =============================================================================
+-- =============================================================================
 -- CBSJC Planeador RAG — Security Hardening Migration
 -- 002_security_hardening.sql
 -- Created: 2026-09-01
@@ -236,6 +236,10 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('source-documents', 'source-documents', false)
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('generated-exports', 'generated-exports', false)
+ON CONFLICT (id) DO NOTHING;
+
 -- Storage object policies for source-documents
 DROP POLICY IF EXISTS "source_documents_bucket: authenticated select" ON storage.objects;
 CREATE POLICY "source_documents_bucket: authenticated select"
@@ -257,3 +261,29 @@ CREATE POLICY "source_documents_bucket: authenticated delete own"
     bucket_id = 'source-documents'
     AND (storage.foldername(name))[1] = auth.uid()::text
   );
+
+-- Storage object policies for generated-exports
+DROP POLICY IF EXISTS "generated_exports_bucket: authenticated select own" ON storage.objects;
+CREATE POLICY "generated_exports_bucket: authenticated select own"
+  ON storage.objects FOR SELECT TO authenticated
+  USING (
+    bucket_id = 'generated-exports'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+DROP POLICY IF EXISTS "generated_exports_bucket: authenticated insert own" ON storage.objects;
+CREATE POLICY "generated_exports_bucket: authenticated insert own"
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'generated-exports'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+DROP POLICY IF EXISTS "generated_exports_bucket: authenticated delete own" ON storage.objects;
+CREATE POLICY "generated_exports_bucket: authenticated delete own"
+  ON storage.objects FOR DELETE TO authenticated
+  USING (
+    bucket_id = 'generated-exports'
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+

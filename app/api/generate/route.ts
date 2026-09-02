@@ -7,12 +7,13 @@
  * - Optional additional files (e.g. PRAE, departmental guides)
  * - Pedagogical metadata: docente, area, grado, periodo, semanas, tema, additionalInstructions
  *
- * Extracts text dynamically (with OCR fallback for scanned PDFs), calls Gemini 2.0 Flash
- * with the official SJB-RGA006 Planning Book prompt, generates the 3 deliverables,
- * persists the document, and returns the result.
+ * Extracts text polymorphically (with OCR fallback for scanned PDFs), calls Gemini
+ * multi-model fallback with the official SJB-RGA006 Planning Book prompt, generates
+ * the 3 deliverables, persists the document in Supabase, and returns the result.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { generatePlanningDocument } from '@/lib/ai/generator'
@@ -24,7 +25,28 @@ import {
   addRateLimitHeaders,
 } from '@/lib/security/rate-limit'
 
-export const maxDuration = 60 // 60 seconds timeout for heavy OCR / generation
+export const maxDuration = 60 // 60 seconds timeout for heavy extraction / AI generation
+
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024 // 25 MB per file
+const MAX_TOTAL_SIZE_BYTES = 60 * 1024 * 1024 // 60 MB total payload
+const MAX_ADDITIONAL_FILES = 5
+
+const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.doc', '.md', '.txt']
+
+function isAllowedFile(file: File): boolean {
+  const name = file.name.toLowerCase()
+  return ALLOWED_EXTENSIONS.some((ext) => name.endsWith(ext))
+}
+
+const generateFormSchema = z.object({
+  docente: z.string().trim().min(1, 'El nombre del docente es obligatorio').max(200, 'El nombre no puede superar 200 caracteres'),
+  area: z.string().trim().max(100, 'El área no puede superar 100 caracteres').default('general'),
+  grado: z.string().trim().max(100, 'El grado no puede superar 100 caracteres').default(''),
+  periodo: z.enum(['I', 'II', 'III', 'IV']).default('I'),
+  semanas: z.string().trim().max(150, 'El campo semanas no puede superar 150 caracteres').default('4 semanas (sesiones de 90 min)'),
+  tema: z.string().trim().min(1, 'El tema o pregunta de sentido es obligatorio').max(300, 'El tema no puede superar 300 caracteres'),
+  additionalInstructions: z.string().trim().max(3000, 'Las instrucciones adicionales no pueden superar 3000 caracteres').default(''),
+})
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const supabase = await createClient()
@@ -34,7 +56,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Sesión no válida o expirada. Por favor, inicia sesión nuevamente en el sistema CBSJC.',
+      },
+      { status: 401 }
+    )
   }
 
   // Rate limit check
@@ -42,7 +70,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!rateLimitResult.success) {
     return createRateLimitResponse(
       rateLimitResult,
-      `Has excedido el límite de generación (${RATE_LIMIT_PRESETS.generate.limit} por minuto). Por favor espera ${rateLimitResult.retryAfterSeconds} segundos.`
+      `Has alcanzado el límite de generación (${RATE_LIMIT_PRESETS.generate.limit} por minuto). Por favor espera ${rateLimitResult.retryAfterSeconds} segundos antes de intentar nuevamente.`
     )
   }
 
@@ -50,23 +78,41 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     formData = await request.formData()
   } catch {
-    return NextResponse.json({ success: false, error: 'FormData inválido o malformado' }, { status: 400 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Los datos del formulario están dañados o no pudieron ser procesados (FormData inválido).',
+      },
+      { status: 400 }
+    )
   }
 
-  const docente = String(formData.get('docente') || formData.get('author') || '').trim()
-  const area = String(formData.get('area') || 'general').trim()
-  const grado = String(formData.get('grado') || '').trim()
-  const periodo = String(formData.get('periodo') || 'I').trim()
-  const semanas = String(formData.get('semanas') || '4 semanas (sesiones de 90 min)').trim()
-  const tema = String(formData.get('tema') || formData.get('title') || 'Secuencia Didáctica').trim()
-  const additionalInstructions = String(formData.get('additionalInstructions') || formData.get('instrucciones') || '').trim()
+  const rawPeriodo = String(formData.get('periodo') || 'I').trim().toUpperCase()
+  let normalizedPeriodo: 'I' | 'II' | 'III' | 'IV' = 'I'
+  if (rawPeriodo.includes('IV') || rawPeriodo === '4') normalizedPeriodo = 'IV'
+  else if (rawPeriodo.includes('III') || rawPeriodo === '3') normalizedPeriodo = 'III'
+  else if (rawPeriodo.includes('II') || rawPeriodo === '2') normalizedPeriodo = 'II'
+  else normalizedPeriodo = 'I'
 
-  if (!docente) {
-    return NextResponse.json({ success: false, error: 'El nombre del docente es requerido' }, { status: 400 })
+  const rawFormData = {
+    docente: String(formData.get('docente') || formData.get('author') || '').trim(),
+    area: String(formData.get('area') || 'general').trim(),
+    grado: String(formData.get('grado') || '').trim(),
+    periodo: normalizedPeriodo,
+    semanas: String(formData.get('semanas') || '4 semanas (sesiones de 90 min)').trim(),
+    tema: String(formData.get('tema') || formData.get('title') || 'Secuencia Didáctica').trim(),
+    additionalInstructions: String(formData.get('additionalInstructions') || formData.get('instrucciones') || '').trim(),
   }
-  if (!tema) {
-    return NextResponse.json({ success: false, error: 'El tema o título de la secuencia es requerido' }, { status: 400 })
+
+  const parsedFields = generateFormSchema.safeParse(rawFormData)
+  if (!parsedFields.success) {
+    return NextResponse.json(
+      { success: false, error: parsedFields.error.flatten().fieldErrors },
+      { status: 400 }
+    )
   }
+
+  const { docente, area, grado, periodo, semanas, tema, additionalInstructions } = parsedFields.data
 
   // Extract uploaded files
   const planDeAreaFile = formData.get('plan_de_area') as File | null
@@ -75,21 +121,105 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const adicionalesFiles = formData.getAll('adicionales') as File[]
 
   if (!planDeAreaFile || !(planDeAreaFile instanceof File)) {
-    return NextResponse.json({ success: false, error: 'El documento Plan de Área es obligatorio' }, { status: 400 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'El documento rector "Plan de Área" es obligatorio para la alineación curricular del CBSJC.',
+      },
+      { status: 400 }
+    )
   }
   if (!siapFile || !(siapFile instanceof File)) {
-    return NextResponse.json({ success: false, error: 'El documento SIAP es obligatorio' }, { status: 400 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'El documento "SIAP" (Malla Curricular Institucional) es obligatorio para estructurar la secuencia.',
+      },
+      { status: 400 }
+    )
   }
   if (!cuadernilloFile || !(cuadernilloFile instanceof File)) {
-    return NextResponse.json({ success: false, error: 'El documento Cuadernillo es obligatorio' }, { status: 400 })
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'El documento "Cuadernillo de Asignatura" es obligatorio como referente evaluativo.',
+      },
+      { status: 400 }
+    )
+  }
+
+  // Validate file types and sizes
+  const mandatoryFiles = [
+    { file: planDeAreaFile, label: 'Plan de Área' },
+    { file: siapFile, label: 'SIAP' },
+    { file: cuadernilloFile, label: 'Cuadernillo' },
+  ]
+
+  let totalBytes = 0
+  for (const { file, label } of mandatoryFiles) {
+    if (!isAllowedFile(file)) {
+      return NextResponse.json(
+        { success: false, error: `Formato no permitido para "${label}" (${file.name}). Permitidos: PDF, Word (.docx), Markdown (.md, .txt).` },
+        { status: 415 }
+      )
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      return NextResponse.json(
+        { success: false, error: `El archivo "${label}" supera el tamaño máximo permitido de 25 MB.` },
+        { status: 413 }
+      )
+    }
+    totalBytes += file.size
+  }
+
+  if (adicionalesFiles.length > MAX_ADDITIONAL_FILES) {
+    return NextResponse.json(
+      { success: false, error: `Se permite un máximo de ${MAX_ADDITIONAL_FILES} documentos adicionales.` },
+      { status: 400 }
+    )
+  }
+
+  for (const addFile of adicionalesFiles) {
+    if (addFile instanceof File && addFile.size > 0) {
+      if (!isAllowedFile(addFile)) {
+        return NextResponse.json(
+          { success: false, error: `Formato no permitido en documento adicional (${addFile.name}).` },
+          { status: 415 }
+        )
+      }
+      if (addFile.size > MAX_FILE_SIZE_BYTES) {
+        return NextResponse.json(
+          { success: false, error: `El documento adicional "${addFile.name}" supera los 25 MB.` },
+          { status: 413 }
+        )
+      }
+      totalBytes += addFile.size
+    }
+  }
+
+  if (totalBytes > MAX_TOTAL_SIZE_BYTES) {
+    return NextResponse.json(
+      { success: false, error: `El tamaño acumulado de los archivos excede el límite de 60 MB.` },
+      { status: 413 }
+    )
   }
 
   try {
-    // 1. Extract text from all files in parallel
+    // 1. Extract text from all files in parallel with descriptive error tracking
+    const extractFileSafely = async (file: File, label: string) => {
+      try {
+        const buf = await file.arrayBuffer()
+        return await extractTextFromFile(Buffer.from(buf), file.name, file.type)
+      } catch (extractErr) {
+        const detail = extractErr instanceof Error ? extractErr.message : String(extractErr)
+        throw new Error(`Error en el documento "${label}" (${file.name}): ${detail}`)
+      }
+    }
+
     const [planDeAreaRes, siapRes, cuadernilloRes] = await Promise.all([
-      planDeAreaFile.arrayBuffer().then((buf) => extractTextFromFile(Buffer.from(buf), planDeAreaFile.name)),
-      siapFile.arrayBuffer().then((buf) => extractTextFromFile(Buffer.from(buf), siapFile.name)),
-      cuadernilloFile.arrayBuffer().then((buf) => extractTextFromFile(Buffer.from(buf), cuadernilloFile.name)),
+      extractFileSafely(planDeAreaFile, 'Plan de Área'),
+      extractFileSafely(siapFile, 'SIAP'),
+      extractFileSafely(cuadernilloFile, 'Cuadernillo'),
     ])
 
     const contextDocs: Array<{
@@ -105,14 +235,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Process additional files if present
     for (const addFile of adicionalesFiles) {
       if (addFile instanceof File && addFile.size > 0) {
-        const buf = await addFile.arrayBuffer()
-        const extRes = await extractTextFromFile(Buffer.from(buf), addFile.name)
-        contextDocs.push({
-          tipo: 'adicional',
-          filename: addFile.name,
-          content: extRes.text,
-        })
+        try {
+          const extRes = await extractFileSafely(addFile, 'Documento Adicional')
+          contextDocs.push({
+            tipo: 'adicional',
+            filename: addFile.name,
+            content: extRes.text,
+          })
+        } catch (addErr) {
+          console.warn(`[POST /api/generate] Skipping unreadable additional file ${addFile.name}:`, addErr)
+        }
       }
+    }
+
+    // Verify that at least some readable text was extracted
+    const totalChars = contextDocs.reduce((acc, doc) => acc + doc.content.length, 0)
+    if (totalChars < 50) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Los documentos subidos contienen muy poco texto o no pudieron ser leídos. Por favor verifica que los archivos PDF, Word o Markdown contengan texto o imágenes nítidas.',
+        },
+        { status: 422 }
+      )
     }
 
     // 2. Call AI Generator for official SJB-RGA006 Planning Book
@@ -120,7 +266,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       docente,
       area,
       grado,
-      periodo,
+      periodo: normalizedPeriodo,
       semanas,
       tema,
       additionalInstructions,
@@ -128,7 +274,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       contextDocs,
     })
 
-    // Store metadata & structured output as JSON inside content / additional_instructions
+    // Store metadata & structured output as JSON inside content
     const combinedPayload = JSON.stringify({
       planningBookMarkdown: generated.planningBookMarkdown,
       rubricsMarkdown: generated.rubricsMarkdown,
@@ -138,12 +284,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         docente,
         area,
         grado,
-        periodo,
+        periodo: normalizedPeriodo,
         semanas,
         tema,
         files: contextDocs.map((d) => ({ tipo: d.tipo, name: d.filename })),
       },
     })
+
+    // Ensure user profile exists to avoid FK constraint errors
+    await supabaseAdmin
+      .from('profiles')
+      .upsert(
+        {
+          id: user.id,
+          email: user.email || '',
+          full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Docente',
+          avatar_url: user.user_metadata?.avatar_url || null,
+        },
+        { onConflict: 'id' }
+      )
 
     // 3. Save to generated_documents table in Supabase
     const { data: savedDoc, error: insertError } = await supabaseAdmin
@@ -155,7 +314,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         nivel: 'general',
         area: area as any,
         grado: grado || null,
-        periodo: periodo as any,
+        periodo: normalizedPeriodo,
         content: combinedPayload,
         additional_instructions: additionalInstructions || null,
         sources_used: contextDocs.length,
@@ -168,7 +327,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (insertError || !savedDoc) {
       console.error('[POST /api/generate] DB insert error:', insertError?.message)
       return NextResponse.json(
-        { success: false, error: 'No se pudo registrar la planeación en la base de datos' },
+        {
+          success: false,
+          error:
+            'No se pudo registrar la planeación en la base de datos institucional. Por favor intenta de nuevo.',
+        },
         { status: 500 }
       )
     }
@@ -185,8 +348,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     return addRateLimitHeaders(successResponse, rateLimitResult)
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Error desconocido en la generación'
-    console.error('[POST /api/generate] Execution error:', msg)
-    return NextResponse.json({ success: false, error: msg }, { status: 500 })
+    const rawMsg = err instanceof Error ? err.message : 'Error inesperado durante la generación'
+    console.error('[POST /api/generate] Generation failure:', rawMsg)
+
+    // Determine appropriate HTTP status code based on error nature
+    let statusCode = 500
+    if (rawMsg.includes('alta demanda') || rawMsg.includes('503') || rawMsg.includes('UNAVAILABLE')) {
+      statusCode = 503
+    } else if (rawMsg.includes('límite de tasa') || rawMsg.includes('cuota') || rawMsg.includes('429')) {
+      statusCode = 429
+    } else if (rawMsg.includes('Error en el documento') || rawMsg.includes('dañado')) {
+      statusCode = 422
+    }
+
+    return NextResponse.json({ success: false, error: rawMsg }, { status: statusCode })
   }
 }

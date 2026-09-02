@@ -3,6 +3,8 @@
  * Splits documents into overlapping chunks suitable for embedding.
  */
 
+import 'server-only'
+
 /** Simple token count estimate: 1 token ≈ 4 characters. */
 export function estimateTokens(text: string): number {
   if (!text) return 0

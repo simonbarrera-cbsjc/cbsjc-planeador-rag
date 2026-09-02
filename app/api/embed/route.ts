@@ -79,6 +79,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ success: false, error: 'Documento no encontrado' }, { status: 404 })
   }
 
+  // Authorization check: User must own the document or have admin role
+  if (doc.user_id !== user.id) {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.role !== 'admin') {
+      return NextResponse.json(
+        { success: false, error: 'No tienes permisos para procesar este documento' },
+        { status: 403 }
+      )
+    }
+  }
+
   // Mark as processing
   await supabaseAdmin
     .from('source_documents')

@@ -4,6 +4,7 @@
  * `chunks` table via the `match_chunks` Postgres function with multi-tier fallback.
  */
 
+import 'server-only'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { generateEmbedding } from './embeddings'
 

@@ -563,14 +563,22 @@ export default function GeneratePage() {
               <span>Triple Entregable Automatizado CBSJC</span>
             </div>
             <p className="text-xs text-slate-200 leading-relaxed max-w-xl">
-              Al hacer clic en <strong>Generar</strong>, el sistema procesará los documentos rectores y creará simultáneamente:
-              <br />
-              • 📘 <strong>Planning Book Oficial (SJB-RGA006)</strong> en Word (.docx) y PDF.
-              <br />
-              • 🎯 <strong>Rúbricas Evaluativas</strong> con bloque de traslado a Cibercolegios.
-              <br />
-              • 📊 <strong>Planilla de Notas en Excel (.xlsx)</strong> con ponderaciones 35/35/20/10 y fórmulas automáticas.
+              Al hacer clic en <strong className="text-white">Generar</strong>, el motor RAG procesará los documentos rectores y creará simultáneamente:
             </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+              <div className="flex items-center gap-1.5 text-xs text-slate-200">
+                <BookOpen className="h-3.5 w-3.5 text-[#D71921] shrink-0" />
+                <span>Planning Book (Word & PDF)</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-200">
+                <TableProperties className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                <span>Rúbricas & Cibercolegios</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-200">
+                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                <span>Planilla de Notas Excel (.xlsx)</span>
+              </div>
+            </div>
           </div>
 
           <Button

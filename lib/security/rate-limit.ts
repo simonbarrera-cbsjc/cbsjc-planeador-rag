@@ -7,6 +7,7 @@
  * including standard HTTP rate-limit headers and 429 response helpers.
  */
 
+import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
 
 export interface RateLimitOptions {

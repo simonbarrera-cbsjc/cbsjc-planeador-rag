@@ -3,6 +3,12 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import type { TablesUpdate } from '@/types/supabase'
+import {
+  rateLimit,
+  RATE_LIMIT_PRESETS,
+  createRateLimitResponse,
+  addRateLimitHeaders,
+} from '@/lib/security/rate-limit'
 
 const getQuerySchema = z.object({
   id: z.string().uuid('ID de documento debe ser un UUID válido').optional(),
@@ -31,6 +37,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
     }
 
+    const rateLimitResult = rateLimit(request, RATE_LIMIT_PRESETS.default, user.id)
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(
+        rateLimitResult,
+        `Has excedido el límite de solicitudes (${RATE_LIMIT_PRESETS.default.limit} por minuto). Por favor espera ${rateLimitResult.retryAfterSeconds} segundos.`
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const rawId = searchParams.get('id') || undefined
 
@@ -56,7 +70,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'Documento no encontrado' }, { status: 404 })
       }
 
-      return NextResponse.json({ success: true, document })
+      const successResponse = NextResponse.json({ success: true, document })
+      return addRateLimitHeaders(successResponse, rateLimitResult)
     }
 
     // List all user's generated documents
@@ -70,7 +85,8 @@ export async function GET(request: NextRequest) {
       throw error
     }
 
-    return NextResponse.json({ success: true, documents: documents || [] })
+    const successResponse = NextResponse.json({ success: true, documents: documents || [] })
+    return addRateLimitHeaders(successResponse, rateLimitResult)
   } catch (error) {
     console.error('Error fetching generated documents:', error)
     return NextResponse.json(
@@ -91,6 +107,14 @@ export async function PATCH(request: NextRequest) {
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+    }
+
+    const rateLimitResult = rateLimit(request, RATE_LIMIT_PRESETS.default, user.id)
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(
+        rateLimitResult,
+        `Has excedido el límite de modificaciones. Por favor espera ${rateLimitResult.retryAfterSeconds} segundos.`
+      )
     }
 
     let body: unknown
@@ -128,7 +152,8 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Documento no encontrado o error al actualizar' }, { status: 404 })
     }
 
-    return NextResponse.json({ success: true, document: updated })
+    const successResponse = NextResponse.json({ success: true, document: updated })
+    return addRateLimitHeaders(successResponse, rateLimitResult)
   } catch (error) {
     console.error('Error updating document:', error)
     return NextResponse.json(
@@ -149,6 +174,14 @@ export async function DELETE(request: NextRequest) {
 
     if (authError || !user) {
       return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+    }
+
+    const rateLimitResult = rateLimit(request, RATE_LIMIT_PRESETS.upload, user.id)
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse(
+        rateLimitResult,
+        `Has excedido el límite de eliminación. Por favor espera ${rateLimitResult.retryAfterSeconds} segundos.`
+      )
     }
 
     const { searchParams } = new URL(request.url)
@@ -174,7 +207,8 @@ export async function DELETE(request: NextRequest) {
       throw error
     }
 
-    return NextResponse.json({ success: true })
+    const successResponse = NextResponse.json({ success: true })
+    return addRateLimitHeaders(successResponse, rateLimitResult)
   } catch (error) {
     console.error('Error deleting generated document:', error)
     return NextResponse.json(

@@ -3,6 +3,8 @@
  * @description Plain text and Markdown (.md) document extractor.
  */
 
+import 'server-only'
+
 export interface ExtractedMdResult {
   text: string
   pageCount: number
