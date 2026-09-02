@@ -1,5 +1,7 @@
 import 'server-only'
 import PDFDocument from 'pdfkit'
+import path from 'path'
+import fs from 'fs'
 
 if (typeof window !== 'undefined') {
   throw new Error('lib/export/pdf.tsx must only be used on the server.')
@@ -21,12 +23,22 @@ interface GeneratePdfParams {
 }
 
 /**
- * Generates the official CBSJC Planning Book (SJB-RGA006) in PDF using PDFKit.
- * Eliminates all Yoga Flexbox layout overflows and guarantees 100% stability across 30+ page documents.
+ * Generates the official CBSJC Planning Book (SJB-RGA006) in PDF using native PDFKit.
+ * Uses explicit in-memory TrueType fonts (Roboto) to bypass any AFM / standard-fonts bundling issues.
  */
 export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
   const { title, content, metadata } = params
   const safeDocente = metadata.authorName || 'Docente Titular CBSJC'
+
+  // Load TTF font buffers
+  const fontDir = path.join(process.cwd(), 'public', 'fonts')
+  const regularPath = path.join(fontDir, 'Roboto-Regular.ttf')
+  const boldPath = path.join(fontDir, 'Roboto-Bold.ttf')
+  const italicPath = path.join(fontDir, 'Roboto-Italic.ttf')
+
+  const regularFont = fs.existsSync(regularPath) ? fs.readFileSync(regularPath) : null
+  const boldFont = fs.existsSync(boldPath) ? fs.readFileSync(boldPath) : null
+  const italicFont = fs.existsSync(italicPath) ? fs.readFileSync(italicPath) : null
 
   return new Promise((resolve, reject) => {
     try {
@@ -41,6 +53,15 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
           Subject: 'Planning Book SJB-RGA006 CBSJC',
         },
       })
+
+      // Register explicit TTF fonts
+      if (regularFont) doc.registerFont('Roboto', regularFont)
+      if (boldFont) doc.registerFont('Roboto-Bold', boldFont)
+      if (italicFont) doc.registerFont('Roboto-Italic', italicFont)
+
+      const fontReg = regularFont ? 'Roboto' : 'Helvetica'
+      const fontBold = boldFont ? 'Roboto-Bold' : 'Helvetica-Bold'
+      const fontItalic = italicFont ? 'Roboto-Italic' : 'Helvetica-Oblique'
 
       const buffers: Buffer[] = []
       doc.on('data', (chunk: Buffer) => buffers.push(chunk))
@@ -66,25 +87,25 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
 
         // Left Column (Crest placeholder)
         doc.rect(MARGIN, top, 80, height).lineWidth(0.5).stroke(COLOR_BORDER)
-        doc.font('Helvetica-Bold').fontSize(11).fillColor(COLOR_NAVY)
+        doc.font(fontBold).fontSize(11).fillColor(COLOR_NAVY)
         doc.text('CBSJC', MARGIN, top + 14, { width: 80, align: 'center' })
 
         // Center Column (Title)
         const centerWidth = CONTENT_WIDTH - 80 - 130
         doc.rect(MARGIN + 80, top, centerWidth, height).lineWidth(0.5).stroke(COLOR_BORDER)
-        doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLOR_NAVY)
+        doc.font(fontBold).fontSize(8.5).fillColor(COLOR_NAVY)
         doc.text('COLEGIO BILINGÜE SAN JOSÉ CAMPESTRE', MARGIN + 80, top + 5, { width: centerWidth, align: 'center' })
-        doc.font('Helvetica-Bold').fontSize(7.5).fillColor(COLOR_RED)
+        doc.font(fontBold).fontSize(7.5).fillColor(COLOR_RED)
         doc.text('PLANNING BOOK PRIMARY & SECONDARY', MARGIN + 80, top + 16, { width: centerWidth, align: 'center' })
-        doc.font('Helvetica').fontSize(6.5).fillColor('#64748B')
+        doc.font(fontReg).fontSize(6.5).fillColor('#64748B')
         doc.text('Secuencia Didáctica: Antes — Durante — Después · Subciclos 3 a 6', MARGIN + 80, top + 27, { width: centerWidth, align: 'center' })
 
         // Right Column (Quality code)
         const rightX = MARGIN + 80 + centerWidth
         doc.rect(rightX, top, 130, height).fillAndStroke(COLOR_GRAY_BG, COLOR_BORDER)
-        doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR_NAVY)
+        doc.font(fontBold).fontSize(7).fillColor(COLOR_NAVY)
         doc.text('CÓDIGO: SJB-RGA006', rightX + 6, top + 6, { width: 118, align: 'left' })
-        doc.font('Helvetica').fontSize(6.5).fillColor('#64748B')
+        doc.font(fontReg).fontSize(6.5).fillColor('#64748B')
         doc.text('VERSIÓN: 4  VIGENCIA: 2026', rightX + 6, top + 17, { width: 118, align: 'left' })
         doc.restore()
       }
@@ -134,7 +155,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
           let maxHeight = 16
           cells.forEach((cell, ci) => {
             const w = colWidths[ci] || 50
-            doc.font(isHeader ? 'Helvetica-Bold' : 'Helvetica').fontSize(7)
+            doc.font(isHeader ? fontBold : fontReg).fontSize(7)
             const textH = doc.heightOfString(cleanText(cell), { width: w - 8 })
             if (textH + 8 > maxHeight) maxHeight = textH + 8
           })
@@ -150,7 +171,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
         let curX = MARGIN
         headers.forEach((h, ci) => {
           const w = colWidths[ci]
-          doc.font('Helvetica-Bold').fontSize(7).fillColor('#FFFFFF')
+          doc.font(fontBold).fontSize(7).fillColor('#FFFFFF')
           doc.text(cleanText(h), curX + 4, currentY + 4, { width: w - 8, align: 'left' })
           curX += w
         })
@@ -174,9 +195,9 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
             const w = colWidths[ci]
             if (isTwoCol && ci === 0) {
               doc.rect(rowX, currentY, w, rowH).fillAndStroke(COLOR_GRAY_BG, COLOR_BORDER)
-              doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR_NAVY)
+              doc.font(fontBold).fontSize(7).fillColor(COLOR_NAVY)
             } else {
-              doc.font('Helvetica').fontSize(7).fillColor(COLOR_TEXT)
+              doc.font(fontReg).fontSize(7).fillColor(COLOR_TEXT)
             }
             doc.text(cleanText(c), rowX + 4, currentY + 4, { width: w - 8, align: 'left' })
             rowX += w
@@ -209,41 +230,41 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
         if (line.startsWith('# ')) {
           checkPageBreak(25)
           const text = cleanText(line.substring(2))
-          doc.font('Helvetica-Bold').fontSize(11).fillColor(COLOR_NAVY)
+          doc.font(fontBold).fontSize(11).fillColor(COLOR_NAVY)
           doc.text(text, MARGIN, currentY, { width: CONTENT_WIDTH })
           currentY += doc.heightOfString(text, { width: CONTENT_WIDTH }) + 5
         } else if (line.startsWith('## ')) {
           checkPageBreak(20)
           const text = cleanText(line.substring(3))
-          doc.font('Helvetica-Bold').fontSize(10).fillColor(COLOR_NAVY)
+          doc.font(fontBold).fontSize(10).fillColor(COLOR_NAVY)
           doc.text(text, MARGIN, currentY, { width: CONTENT_WIDTH })
           currentY += doc.heightOfString(text, { width: CONTENT_WIDTH }) + 4
         } else if (line.startsWith('### ')) {
           checkPageBreak(18)
           const text = cleanText(line.substring(4))
-          doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLOR_RED)
+          doc.font(fontBold).fontSize(8.5).fillColor(COLOR_RED)
           doc.text(text, MARGIN, currentY, { width: CONTENT_WIDTH })
           currentY += doc.heightOfString(text, { width: CONTENT_WIDTH }) + 3
         } else if (line.startsWith('#### ') || line.startsWith('##### ') || line.startsWith('###### ')) {
           checkPageBreak(16)
           const text = cleanText(line.replace(/^#{4,6}\s*/, ''))
-          doc.font('Helvetica-Bold').fontSize(8).fillColor(COLOR_NAVY)
+          doc.font(fontBold).fontSize(8).fillColor(COLOR_NAVY)
           doc.text(text, MARGIN, currentY, { width: CONTENT_WIDTH })
           currentY += doc.heightOfString(text, { width: CONTENT_WIDTH }) + 3
         } else if (line.startsWith('- ') || line.startsWith('* ')) {
           const bulletContent = cleanText(line.substring(2))
-          doc.font('Helvetica').fontSize(8)
+          doc.font(fontReg).fontSize(8)
           const textH = doc.heightOfString(bulletContent, { width: CONTENT_WIDTH - 15 })
           checkPageBreak(textH + 2)
-          doc.font('Helvetica-Bold').fontSize(8).fillColor(COLOR_RED).text('•', MARGIN + 4, currentY)
-          doc.font('Helvetica').fontSize(8).fillColor(COLOR_TEXT).text(bulletContent, MARGIN + 14, currentY, { width: CONTENT_WIDTH - 14 })
+          doc.font(fontBold).fontSize(8).fillColor(COLOR_RED).text('•', MARGIN + 4, currentY)
+          doc.font(fontReg).fontSize(8).fillColor(COLOR_TEXT).text(bulletContent, MARGIN + 14, currentY, { width: CONTENT_WIDTH - 14 })
           currentY += textH + 2
         } else {
           const text = cleanText(line)
-          doc.font('Helvetica').fontSize(8)
+          doc.font(fontReg).fontSize(8)
           const textH = doc.heightOfString(text, { width: CONTENT_WIDTH })
           checkPageBreak(textH + 3)
-          doc.font('Helvetica').fontSize(8).fillColor(COLOR_TEXT).text(text, MARGIN, currentY, { width: CONTENT_WIDTH, align: 'justify' })
+          doc.font(fontReg).fontSize(8).fillColor(COLOR_TEXT).text(text, MARGIN, currentY, { width: CONTENT_WIDTH, align: 'justify' })
           currentY += textH + 3
         }
       }
@@ -259,7 +280,7 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
         doc.switchToPage(p)
         doc.save()
         doc.rect(MARGIN, PAGE_HEIGHT - 26, CONTENT_WIDTH, 0.5).fill(COLOR_BORDER)
-        doc.font('Helvetica').fontSize(6.5).fillColor('#94A3B8')
+        doc.font(fontReg).fontSize(6.5).fillColor('#94A3B8')
         doc.text(`Colegio Bilingüe San José Campestre • Formato SJB-RGA006 • Docente: ${safeDocente}`, MARGIN, PAGE_HEIGHT - 20, { width: CONTENT_WIDTH * 0.75, align: 'left' })
         doc.text(`Pág. ${p + 1} de ${range.count}`, MARGIN + CONTENT_WIDTH * 0.75, PAGE_HEIGHT - 20, { width: CONTENT_WIDTH * 0.25, align: 'right' })
         doc.restore()
