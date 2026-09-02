@@ -260,8 +260,10 @@ export default function PreviewPage({ params }: PreviewPageProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [document, planningMarkdown, rubricsMarkdown, cibercolegiosSnippet, excelMetadata])
 
-  // Export handler (Word, PDF, Excel, ZIP)
-  const handleExport = async (format: 'pdf' | 'docx' | 'rubrics_docx' | 'excel' | 'zip') => {
+  // Export handler (Word, PDF, Excel, ZIP, Prompts TXT)
+  const handleExport = async (
+    format: 'pdf' | 'docx' | 'rubrics_docx' | 'excel' | 'zip' | 'prompts_txt'
+  ) => {
     if (!document) return
     try {
       setExportingFormat(format)
@@ -290,6 +292,8 @@ export default function PreviewPage({ params }: PreviewPageProps) {
             ? 'xlsx'
             : format === 'zip'
             ? 'zip'
+            : format === 'prompts_txt'
+            ? 'txt'
             : 'docx'
         a.download = `${document.title}.${ext}`
         window.document.body.appendChild(a)
@@ -567,17 +571,17 @@ export default function PreviewPage({ params }: PreviewPageProps) {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-xs font-bold text-[#0E1B4D] flex items-center gap-1.5">
                     <FolderArchive className="h-4 w-4 text-[#D71921]" />
-                    Paquete Curricular Completo
+                    Paquete Curricular Completo (ZIP)
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 text-xs text-slate-600">
+                <CardContent className="space-y-2.5 text-xs text-slate-600">
                   <p className="text-[11px] text-slate-500">
-                    Descarga en un solo archivo comprimido (.zip):
+                    Descarga todos los entregables en un solo paquete comprimido:
                   </p>
                   <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-1.5 text-[11px]">
                     <p className="flex items-center gap-1.5 font-medium text-slate-800">
                       <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      1. Planning Book Word (.docx)
+                      1. Planning Book Oficial (.docx & .pdf)
                     </p>
                     <p className="flex items-center gap-1.5 font-medium text-slate-800">
                       <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
@@ -585,20 +589,42 @@ export default function PreviewPage({ params }: PreviewPageProps) {
                     </p>
                     <p className="flex items-center gap-1.5 font-medium text-slate-800">
                       <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      3. Planilla de Notas Excel (.xlsx)
+                      3. Planilla de Notas Automatizada (.xlsx)
+                    </p>
+                    <p className="flex items-center gap-1.5 font-medium text-slate-800">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-[#D71921] shrink-0" />
+                      4. Banco de 30 Prompts IA para Recursos (.txt)
+                    </p>
+                    <p className="flex items-center gap-1.5 font-medium text-slate-800">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      5. Traslado a Cibercolegios (.txt)
                     </p>
                   </div>
                   <Button
                     onClick={() => handleExport('zip')}
                     disabled={exportingFormat !== null}
-                    className="w-full bg-[#0E1B4D] hover:bg-[#162874] text-white text-xs font-bold rounded-xl mt-2 h-9"
+                    className="w-full bg-[#0E1B4D] hover:bg-[#162874] text-white text-xs font-bold rounded-xl h-10 shadow-xs flex items-center justify-center gap-1.5"
                   >
                     {exportingFormat === 'zip' ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <FolderArchive className="h-3.5 w-3.5 mr-1" />
+                      <FolderArchive className="h-3.5 w-3.5" />
                     )}
-                    Descargar Paquete ZIP
+                    <span>Descargar Paquete ZIP (5 en 1)</span>
+                  </Button>
+
+                  <Button
+                    onClick={() => handleExport('prompts_txt')}
+                    disabled={exportingFormat !== null}
+                    variant="outline"
+                    className="w-full border-slate-300 text-slate-700 hover:bg-slate-100 text-[11px] font-bold rounded-xl h-8 flex items-center justify-center gap-1.5 mt-1"
+                  >
+                    {exportingFormat === 'prompts_txt' ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <FileText className="h-3.5 w-3.5 text-[#D71921]" />
+                    )}
+                    <span>Descargar 30 Prompts IA (.txt)</span>
                   </Button>
                 </CardContent>
               </Card>

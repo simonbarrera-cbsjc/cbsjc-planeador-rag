@@ -7,7 +7,8 @@
  * - 'docx': Planning Book in Word .docx
  * - 'rubrics_docx': Rubrics in Word .docx
  * - 'excel': Grade Spreadsheet in Excel .xlsx
- * - 'zip': All deliverables bundled in a single ZIP file
+ * - 'zip': All deliverables bundled in a single ZIP file (including 30 AI Prompts Bank)
+ * - 'prompts_txt': 30 AI Prompts for Teacher Extra Resources
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -20,6 +21,7 @@ import { generateDocx } from '@/lib/export/docx'
 import { generateRubricsDocx } from '@/lib/export/rubrics-docx'
 import { generateGradeSpreadsheet } from '@/lib/export/excel'
 import { createDeliverablesZip } from '@/lib/export/zip'
+import { generatePromptsBankTxt } from '@/lib/ai/prompts-generator'
 import { createGoogleDoc } from '@/lib/export/gdocs'
 import { formatDate } from '@/lib/utils'
 import {
@@ -34,34 +36,36 @@ const SIGNED_URL_EXPIRY_SECONDS = 3600 // 1 hour
 
 const exportBodySchema = z.object({
   documentId: z.string().uuid('documentId must be a valid UUID'),
-  format: z.enum(['pdf', 'docx', 'rubrics_docx', 'excel', 'zip', 'gdocs']),
+  format: z.enum(['pdf', 'docx', 'rubrics_docx', 'excel', 'zip', 'prompts_txt', 'gdocs']),
 })
 
 async function uploadAndSign(
   storagePath: string,
-  buffer: Buffer,
+  fileBuffer: Buffer | string,
   contentType: string
-): Promise<{ path: string; signedUrl: string }> {
+): Promise<{ signedUrl: string }> {
   const { error: uploadError } = await supabaseAdmin.storage
     .from(EXPORTS_BUCKET)
-    .upload(storagePath, buffer, {
+    .upload(storagePath, fileBuffer, {
       contentType,
       upsert: true,
     })
 
   if (uploadError) {
-    throw new Error(`Error subiendo archivo al almacenamiento: ${uploadError.message}`)
+    console.error('[POST /api/export] Storage upload error:', uploadError)
+    throw new Error(`Failed to upload export artifact to storage: ${uploadError.message}`)
   }
 
-  const { data: signedData, error: signError } = await supabaseAdmin.storage
+  const { data: signData, error: signError } = await supabaseAdmin.storage
     .from(EXPORTS_BUCKET)
     .createSignedUrl(storagePath, SIGNED_URL_EXPIRY_SECONDS)
 
-  if (signError || !signedData?.signedUrl) {
-    throw new Error(`Error generando enlace seguro de descarga: ${signError?.message ?? 'vacío'}`)
+  if (signError || !signData?.signedUrl) {
+    console.error('[POST /api/export] Signed URL error:', signError)
+    throw new Error('Failed to create signed URL for export download')
   }
 
-  return { path: storagePath, signedUrl: signedData.signedUrl }
+  return { signedUrl: signData.signedUrl }
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -72,15 +76,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } = await supabase.auth.getUser()
 
   if (authError || !user) {
-    return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 })
+    return NextResponse.json({ success: false, error: 'No autenticado' }, { status: 401 })
   }
 
   const rateLimitResult = rateLimit(request, RATE_LIMIT_PRESETS.export, user.id)
   if (!rateLimitResult.success) {
-    return createRateLimitResponse(
-      rateLimitResult,
-      `Has excedido el límite de exportación. Por favor espera ${rateLimitResult.retryAfterSeconds} segundos.`
-    )
+    return createRateLimitResponse(rateLimitResult)
   }
 
   let body: unknown
@@ -114,7 +115,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .eq('id', user.id)
     .single()
 
-  const authorName = profile?.full_name || user.email?.split('@')[0] || 'Docente CBSJC'
   const formattedDate = formatDate(doc.created_at, doc.language as 'es' | 'en')
 
   // Parse structured payload if stored as JSON
@@ -122,11 +122,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   let rubricsMarkdown = doc.content
   let cibercolegiosSnippet = ''
   let excelSpec = {
-    docente: authorName,
+    docente: 'Docente CBSJC',
     area: doc.area || 'General',
     grado: doc.grado || 'Primaria/Secundaria',
     periodo: String(doc.periodo || 'I'),
     tema: doc.title,
+    evidenciaPrincipal: doc.title,
   }
 
   try {
@@ -141,7 +142,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // legacy plain markdown format
   }
 
+  // Extract true docente name from the document content or excelSpec (not default profile fallback)
+  let authorName = 'Docente CBSJC'
+  if (excelSpec?.docente && excelSpec.docente.trim().length > 0 && excelSpec.docente !== 'Docente CBSJC') {
+    authorName = excelSpec.docente.trim()
+  } else {
+    const docMatch = planningMarkdown.match(/\|\s*\*\*Docente(?:\(s\))?\*\*\s*\|\s*([^|\r\n]+)\s*\|/i)
+    if (docMatch && docMatch[1].trim().length > 0) {
+      authorName = docMatch[1].trim()
+    } else {
+      authorName = profile?.full_name || user.email?.split('@')[0] || 'Docente CBSJC'
+    }
+  }
+
   const safeTitle = doc.title.toLowerCase().replace(/[^a-z0-9_-]/g, '-').slice(0, 50)
+
+  // Generate 30 AI Prompts bank for teacher
+  const aiPromptsTxt = generatePromptsBankTxt({
+    docente: authorName,
+    area: doc.area || excelSpec.area || 'Ciencias',
+    grado: doc.grado || excelSpec.grado || 'Grado 6°',
+    periodo: String(doc.periodo || excelSpec.periodo || 'I'),
+    tema: doc.title,
+    evidenciaPrincipal: excelSpec.evidenciaPrincipal || doc.title,
+  })
 
   try {
     // 1. PDF Export
@@ -223,7 +247,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // 4. Excel .xlsx Grade Spreadsheet
     if (format === 'excel') {
       const excelBuffer = await generateGradeSpreadsheet({
-        docente: excelSpec.docente,
+        docente: authorName,
         area: excelSpec.area,
         grado: excelSpec.grado,
         periodo: excelSpec.periodo,
@@ -240,7 +264,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return addRateLimitHeaders(successResponse, rateLimitResult)
     }
 
-    // 5. Complete ZIP Package with all 4 Deliverables (Planning Book DOCX & PDF, Rubrics DOCX, Excel Planilla)
+    // 5. Complete ZIP Package with all Deliverables
     if (format === 'zip') {
       let planningPdfBuf: Buffer | undefined = undefined
       try {
@@ -249,10 +273,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           content: planningMarkdown,
           documentType: 'planeador',
           language: doc.language as 'es' | 'en',
-          metadata: { area: doc.area, nivel: doc.nivel, grado: doc.grado || undefined, periodo: doc.periodo || undefined, date: formattedDate, authorName },
+          metadata: {
+            area: doc.area,
+            nivel: doc.nivel,
+            grado: doc.grado || undefined,
+            periodo: doc.periodo || undefined,
+            date: formattedDate,
+            authorName,
+          },
         })
       } catch (pdfErr) {
-        console.warn('[POST /api/export] PDF generation omitted from ZIP due to renderer limitation:', pdfErr)
+        console.warn('[POST /api/export] PDF generation omitted from ZIP:', pdfErr)
       }
 
       const [planningDocxBuf, rubricsDocxBuf, excelBuf] = await Promise.all([
@@ -261,16 +292,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           content: planningMarkdown,
           documentType: 'planeador',
           language: doc.language as 'es' | 'en',
-          metadata: { area: doc.area, nivel: doc.nivel, grado: doc.grado || undefined, periodo: doc.periodo || undefined, date: formattedDate, authorName },
+          metadata: {
+            area: doc.area,
+            nivel: doc.nivel,
+            grado: doc.grado || undefined,
+            periodo: doc.periodo || undefined,
+            date: formattedDate,
+            authorName,
+          },
         }),
         generateRubricsDocx({
           title: `Rúbricas Menú de Desafíos: ${doc.title}`,
           content: rubricsMarkdown,
           language: doc.language as 'es' | 'en',
-          metadata: { area: doc.area, nivel: doc.nivel, grado: doc.grado || undefined, periodo: doc.periodo || undefined, date: formattedDate, authorName },
+          metadata: {
+            area: doc.area,
+            nivel: doc.nivel,
+            grado: doc.grado || undefined,
+            periodo: doc.periodo || undefined,
+            date: formattedDate,
+            authorName,
+          },
         }),
         generateGradeSpreadsheet({
-          docente: excelSpec.docente,
+          docente: authorName,
           area: excelSpec.area,
           grado: excelSpec.grado,
           periodo: excelSpec.periodo,
@@ -284,6 +329,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         planningPdf: planningPdfBuf,
         rubricsDocx: rubricsDocxBuf,
         excelSpreadsheet: excelBuf,
+        aiPromptsTxt,
         cibercolegiosTxt: cibercolegiosSnippet,
       })
 
@@ -293,7 +339,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return addRateLimitHeaders(successResponse, rateLimitResult)
     }
 
-    // 6. Google Docs Export
+    // 6. Direct Prompts Bank .txt Download
+    if (format === 'prompts_txt') {
+      const storagePath = `${user.id}/${documentId}/${safeTitle}-30-prompts-ia.txt`
+      const { signedUrl } = await uploadAndSign(storagePath, aiPromptsTxt, 'text/plain; charset=utf-8')
+      const successResponse = NextResponse.json({ success: true, downloadUrl: signedUrl })
+      return addRateLimitHeaders(successResponse, rateLimitResult)
+    }
+
+    // 7. Google Docs Export
     if (format === 'gdocs') {
       const { docUrl } = await createGoogleDoc({
         title: doc.title,

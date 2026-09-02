@@ -7,6 +7,7 @@ export interface ZipPackageParams {
   planningPdf?: Buffer
   rubricsDocx?: Buffer
   excelSpreadsheet?: Buffer
+  aiPromptsTxt?: string
   cibercolegiosTxt?: string
 }
 
@@ -16,7 +17,8 @@ export interface ZipPackageParams {
  * 1. Planning Book (SJB-RGA006) in DOCX & PDF
  * 2. Rubrics Matrix in DOCX
  * 3. Automated Excel Grade Spreadsheet (.xlsx)
- * 4. Cibercolegios copy-paste snippet (.txt)
+ * 4. Bank of 30 specialized AI Prompts for extra resources & activities (.txt)
+ * 5. Cibercolegios copy-paste snippet (.txt)
  */
 export async function createDeliverablesZip(params: ZipPackageParams): Promise<Buffer> {
   const zip = new JSZip()
@@ -42,8 +44,12 @@ export async function createDeliverablesZip(params: ZipPackageParams): Promise<B
     folder.file(`4_Planilla_Notas_${cleanTitle}.xlsx`, params.excelSpreadsheet)
   }
 
+  if (params.aiPromptsTxt && params.aiPromptsTxt.trim().length > 0) {
+    folder.file(`5_Banco_30_Prompts_IA_Recursos_${cleanTitle}.txt`, params.aiPromptsTxt.trim())
+  }
+
   if (params.cibercolegiosTxt && params.cibercolegiosTxt.trim().length > 0) {
-    folder.file(`5_Traslado_Cibercolegios_${cleanTitle}.txt`, params.cibercolegiosTxt.trim())
+    folder.file(`6_Traslado_Cibercolegios_${cleanTitle}.txt`, params.cibercolegiosTxt.trim())
   }
 
   const content = await zip.generateAsync({
@@ -54,4 +60,3 @@ export async function createDeliverablesZip(params: ZipPackageParams): Promise<B
 
   return content
 }
-
