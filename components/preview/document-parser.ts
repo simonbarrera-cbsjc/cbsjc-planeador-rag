@@ -243,6 +243,25 @@ export function blocksToMarkdown(blocks: DocumentBlock[]): string {
 }
 
 /**
+ * Estimate block content weight to ensure realistic A4 sheet capacity (Word physical pages)
+ */
+function getBlockWeight(block: DocumentBlock): number {
+  if (block.type === 'table' && block.tableData) {
+    const rowCount = block.tableData.rows.length
+    const cellChars = block.tableData.rows.reduce(
+      (acc, r) => acc + r.reduce((a, c) => a + c.length, 0),
+      0
+    )
+    return Math.max(rowCount * 120, cellChars * 0.8)
+  }
+  if (block.type === 'h1') return 250
+  if (block.type === 'h2') return 180
+  if (block.type === 'h3') return 120
+  if (block.type === 'h4') return 90
+  return block.content.length
+}
+
+/**
  * Splits blocks into logical A4 pages for paginated Word-like display
  */
 export function splitBlocksIntoPages(blocks: DocumentBlock[]): DocumentPage[] {
@@ -254,6 +273,8 @@ export function splitBlocksIntoPages(blocks: DocumentBlock[]): DocumentPage[] {
   let currentBlocks: DocumentBlock[] = []
   let currentPageTitle = '1. Identificación y Referentes'
   let pageNum = 1
+  let currentPageWeight = 0
+  const MAX_PAGE_WEIGHT = 2200 // Target ~2000-2400 chars/weight per Word A4 sheet
 
   const finishPage = (nextTitle: string) => {
     if (currentBlocks.length > 0) {
@@ -263,49 +284,54 @@ export function splitBlocksIntoPages(blocks: DocumentBlock[]): DocumentPage[] {
         blocks: [...currentBlocks],
       })
       currentBlocks = []
+      currentPageWeight = 0
       currentPageTitle = nextTitle
     }
   }
 
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]
+    const weight = getBlockWeight(block)
 
-    // Explicit page breaks on main section headings (## )
+    // Explicit breaks on section headings
     if (block.type === 'h2') {
       const content = block.content.toUpperCase()
-
       if (content.includes('2. ARCO PEDAGÓGICO')) {
         finishPage('2. Arco Pedagógico: Antes y Durante')
       } else if (content.includes('3. PLAN DE EVALUACIÓN')) {
         finishPage('3. Plan de Evaluación Continua')
       } else if (content.includes('4. PILARES')) {
-        if (currentBlocks.length > 6) {
-          finishPage('4. Pilares y Competencias')
-        }
+        finishPage('4. Pilares y Competencias')
       } else if (content.includes('5. RÚBRICA GLOBAL')) {
         finishPage('5. Rúbrica Global Menú de Desafíos')
       } else if (content.includes('7. BITÁCORA')) {
-        if (currentBlocks.length > 5) {
-          finishPage('7. Bitácora de la Secuencia & Firmas')
-        }
+        finishPage('7. Bitácora de la Secuencia & Firmas')
       } else if (content.includes('8. ANEXO INSTITUCIONAL')) {
         finishPage('8. Anexos Evaluativos Oficiales')
       }
     } else if (block.type === 'h3') {
       const content = block.content.toUpperCase()
       if (content.includes('DURANTE: SEMANA 3') || content.includes('DESPUÉS: EVIDENCIA')) {
-        if (currentBlocks.length > 7) {
-          finishPage('2. Arco Pedagógico: Semana 3 y Cierre')
-        }
-      } else if (content.includes('EVALUACIÓN FINAL 2:') || content.includes('EVALUACIÓN FINAL 3:')) {
-        finishPage(block.content)
+        finishPage('2. Arco Pedagógico: ' + block.content)
+      } else if (content.includes('EVALUACIÓN FINAL 1:')) {
+        finishPage('Anexo 1: Prueba Escrita 10 Ítems')
+      } else if (content.includes('EVALUACIÓN FINAL 2:')) {
+        finishPage('Anexo 2: Examen Práctico Laboratorio')
+      } else if (content.includes('EVALUACIÓN FINAL 3:')) {
+        finishPage('Anexo 3: Sustentación Oral A2 Pitch')
       }
     } else if (block.type === 'divider') {
       finishPage(currentPageTitle)
       continue
     }
 
+    // Weight-based page break to simulate physical A4 pages
+    if (currentPageWeight + weight > MAX_PAGE_WEIGHT && currentBlocks.length > 0) {
+      finishPage(currentPageTitle)
+    }
+
     currentBlocks.push(block)
+    currentPageWeight += weight
   }
 
   if (currentBlocks.length > 0) {

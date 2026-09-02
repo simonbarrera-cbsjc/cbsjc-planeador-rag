@@ -64,18 +64,126 @@ export interface GeneratedPlanningOutput {
   }
 }
 
-export function buildOfficialPrompt(params: GeneratePlanningParams): string {
-  const {
-    docente,
-    area,
-    grado,
-    periodo,
-    semanas,
-    tema,
-    additionalInstructions,
-    contextDocs,
-  } = params
+/**
+ * Ordered fallback candidate models with high token output capacity.
+ */
+export const CANDIDATE_MODELS = [
+  'gemini-3.6-flash',
+  'gemini-flash-latest',
+  'gemini-3.1-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-3.1-pro-preview',
+  'gemini-3.7-flash',
+] as const
 
+const MAX_RETRIES_PER_MODEL = 2
+const BASE_RETRY_DELAY_MS = 1000
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isTransientError(errorMessage: string): boolean {
+  return (
+    errorMessage.includes('503') ||
+    errorMessage.includes('UNAVAILABLE') ||
+    errorMessage.includes('high demand') ||
+    errorMessage.includes('overloaded') ||
+    errorMessage.includes('429') ||
+    errorMessage.includes('RESOURCE_EXHAUSTED') ||
+    errorMessage.includes('quota') ||
+    errorMessage.includes('rate limit') ||
+    errorMessage.includes('500') ||
+    errorMessage.includes('INTERNAL') ||
+    errorMessage.includes('504') ||
+    errorMessage.includes('DEADLINE_EXCEEDED') ||
+    errorMessage.includes('fetch failed') ||
+    errorMessage.includes('ECONNRESET') ||
+    errorMessage.includes('ETIMEDOUT') ||
+    errorMessage.includes('socket hang up')
+  )
+}
+
+function isNotFoundError(errorMessage: string): boolean {
+  return (
+    errorMessage.includes('404') ||
+    errorMessage.includes('NOT_FOUND') ||
+    errorMessage.includes('is not found') ||
+    errorMessage.includes('not supported') ||
+    errorMessage.includes('no longer available') ||
+    errorMessage.includes('deprecated')
+  )
+}
+
+function isAuthError(errorMessage: string): boolean {
+  return (
+    errorMessage.includes('API_KEY_INVALID') ||
+    errorMessage.includes('API key not valid') ||
+    errorMessage.includes('PERMISSION_DENIED') ||
+    errorMessage.includes('403')
+  )
+}
+
+/**
+ * Executes an LLM generation with fallback through candidate models and automatic retries.
+ */
+async function callGenerativeModel(prompt: string, maxOutputTokens = 65536): Promise<string> {
+  const genAI = getGenAIClient()
+  let lastError: Error | null = null
+
+  for (const modelName of CANDIDATE_MODELS) {
+    for (let attempt = 1; attempt <= MAX_RETRIES_PER_MODEL + 1; attempt++) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            temperature: 0.35,
+            topP: 0.95,
+            maxOutputTokens,
+          },
+        })
+
+        const result = await model.generateContent(prompt)
+        const response = await result.response
+        const text = response.text()
+
+        if (text && text.trim().length > 0) {
+          return text.trim()
+        }
+        throw new Error('Respuesta de generación vacía')
+      } catch (err: unknown) {
+        const rawMessage = err instanceof Error ? err.message : String(err)
+        lastError = err instanceof Error ? err : new Error(rawMessage)
+
+        console.warn(`[generator] Model ${modelName} attempt ${attempt} failed: ${rawMessage}`)
+
+        if (isAuthError(rawMessage)) {
+          throw new Error(`Error de autenticación con Google Gemini: ${rawMessage}`)
+        }
+
+        if (isNotFoundError(rawMessage)) {
+          break // switch to next model immediately
+        }
+
+        if (isTransientError(rawMessage) && attempt <= MAX_RETRIES_PER_MODEL) {
+          const backoffDelay = BASE_RETRY_DELAY_MS * attempt + Math.floor(Math.random() * 500)
+          await delay(backoffDelay)
+          continue
+        }
+
+        break
+      }
+    }
+  }
+
+  throw new Error(`Error generando contenido curricular con Gemini. Último error: ${lastError?.message || 'Sin respuesta'}`)
+}
+
+/**
+ * Stage 1 Prompt: Identificación, 13 Referentes de Calidad (Tabla) y Arco Pedagógico (Semanas 1 a 4)
+ */
+function buildStage1Prompt(params: GeneratePlanningParams, formattedContext: string): string {
+  const { docente, area, grado, periodo, semanas, tema, additionalInstructions } = params
   const safeDocente = sanitizeInputText(docente, 200)
   const safeArea = sanitizeInputText(area, 200)
   const safeGrado = sanitizeInputText(grado, 100)
@@ -84,39 +192,20 @@ export function buildOfficialPrompt(params: GeneratePlanningParams): string {
   const safeTema = sanitizeInputText(tema, 300)
   const safeInstructions = sanitizeInputText(additionalInstructions, 3000)
 
-  const formattedContext = contextDocs
-    .map(
-      (doc, i) =>
-        `=== [DOCUMENTO RECTOR / FUENTE ${i + 1}: ${doc.tipo.toUpperCase()} (${doc.filename})] ===\n${sanitizeInputText(doc.content, 12000)}\n`
-    )
-    .join('\n')
-
   return `Eres el Diseñador Curricular y Asistente Pedagógico Oficial del Colegio Bilingüe San José Campestre (CBSJC).
-Tu misión es generar la planeación curricular MAESTRA EXHAUSTIVA, COMPLETA y de MÁXIMA PROFUNDIDAD (Secuencia Didáctica de extensión profesional, mínimo 18 páginas completas en formato impreso/Word, más de 35.000 caracteres, sin resúmenes, sin texto truncado, sin elipsis '...' ni marcadores de posición), bajo el formato oficial **SJB-RGA006 Planning Book (Secuencia Didáctica: Antes — Durante — Después · Subciclos 3 a 6)**.
+Tu misión es generar la **ETAPA 1** de la Planeación Curricular Maestra bajo el formato oficial **SJB-RGA006 Planning Book**.
+Debes producir una redacción EXHAUSTIVA, EXTENSA, PROFUNDA Y SIN RESÚMENES (mínimo 18.000 a 25.000 caracteres solo para esta etapa).
 
-REGLAS DE RIGOR INSTITUCIONAL CBSJC (OBLIGATORIAS):
-1. Ponderación fija inalterable de los 4 pilares: SABER (35%), SABER HACER (35%), SABER SER (20%), SABER CONVIVIR (10%).
-2. Menú de Desafíos con 4 bandas de evaluación rigurosas en todas las rúbricas:
-   - Sin categoría (1.0 – 3.9): En proceso de consolidación / aprueba con debilidades.
-   - Bronze (4.0 – 4.5): Aprendizaje esperado completo del grado (no es un mínimo, es el estándar completo).
-   - Silver (4.6 – 4.7): Lo anterior, y además profundización, justificación técnica extendida y mayor autonomía.
-   - Gold (4.8 – 5.0): Lo anterior, y además excelencia sobresaliente, transferencia original y liderazgo ecológico/PRAE.
-3. Arco pedagógico detallado sesión a sesión para 4 SEMANAS (16 horas de clase):
-   - ANTES (Semana 1): Rutinas See-Think-Wonder, indagación diagnóstica sin costo en la nota, presentación de metas en Tablero de Progreso Anexo A6 en cuaderno.
-   - DURANTE (Semana 2): Profundización conceptual, estaciones de trabajo prácticas, modelación guiada y andamiaje bilingüe ACE.
-   - DURANTE (Semana 3): Integración disciplinar, construcción y modelado del producto central (Capstone), diagramas de flujo y matrices técnicas.
-   - DESPUÉS (Semana 4): Ensamble final, sustentación oral bilingüe A2 ante panel de pares/docente, coevaluación formativa (Praise & Polish) y metacognición con Driving Question.
-4. TRES (3) INSTRUMENTOS DE EVALUACIÓN FINAL COMPLETOS Y DETALLADOS (ANEXOS EVALUATIVOS 1, 2 Y 3):
-   - Anexo 1: Prueba Escrita y Cognitiva Integral (10 preguntas completas y redactadas palabra por palabra: preguntas tipo ICFES con 4 opciones A/B/C/D y justificación, análisis de datos, casos contextualizados en el campus de Tienda Nueva / PRAE, matching bilingüe A2 de 5 términos, párrafo para completar en inglés A2 con word bank, rotulación de 6 partes de diagramas técnicos, integración sistémica, indagación con formulación de hipótesis, comprensión de lectura bilingüe A2 y metacognición/autocuidado) + Rúbrica Analítica de 4 criterios x 4 bandas.
-   - Anexo 2: Examen Práctico de Laboratorio y Habilidades Experimentales (Protocolo completo y detallado de las 4 Estaciones Rotativas de 15 minutos cada una, con materiales, procedimientos paso a paso, tareas y fichas de registro a escala) + Rúbrica Analítica de 4 criterios x 4 bandas.
-   - Anexo 3: Sustentación Oral y Defensa Capstone (Guía y guion bilingüe A2 completo para Scientific Pitch de 3 a 5 minutos, con las 5 fases textuales de apertura, micro-niveles, macro-niveles, PRAE y defensa ante preguntas) + Rúbrica Analítica de 4 criterios x 4 bandas.
-5. CERO ABREVIACIONES O ELIPSIS: Está terminantemente prohibido usar '...', '(continúa...)', '[completar aquí]' o respuestas genéricas. Todo debe estar plenamente redactado con riqueza disciplinar, rigor técnico y contextualización en Tienda Nueva y el campus campestre del CBSJC.
+REGLA FUNDAMENTAL DE FORMATO:
+- La Sección 0 DEBE SER UNA TABLA MARKDOWN (| Identificación | Detalle |).
+- La Sección 1 DEBE SER UNA TABLA MARKDOWN (| Referente Curricular | Contenido y Articulación Institucional |) con EXACTAMENTE 13 FILAS. CADA FILA DEBE TENER ENTRE 10 Y 20 LÍNEAS DE CONTENIDO PEDAGÓGICO COMPLETO. NUNCA USES LISTAS DE PUNTOS EN LUGAR DE LA TABLA.
+- La Sección 2 DEBE TENER EL DESARROLLO ÍNTEGRO SESIÓN A SESIÓN DE LAS 4 SEMANAS (Semana 1: ANTES; Semana 2 y 3: DURANTE; Semana 4: DESPUÉS), con descripciones minuciosas de Warm-up, Core Task, Wrap-up, Consignas Docentes y DUA/PIAR para TDAH.
 
 DATOS DE LA SECUENCIA:
 - Docente(s): ${safeDocente}
 - Área / Asignatura: ${safeArea}
 - Grado / Grupo: ${safeGrado}
-- Período / Subciclo: ${safePeriodo}
+- Período / Subciclo: ${safePeriodo} (Año Lectivo 2026)
 - Semanas / Intervalo: ${safeSemanas}
 - Tema o Pregunta de Sentido: ${safeTema}
 
@@ -126,7 +215,7 @@ ${safeInstructions ? `<docente_instrucciones>\n${safeInstructions}\n</docente_in
 ${formattedContext || 'Utiliza los referentes oficiales del MEN, DBA de Colombia, estándares EBC y lineamientos pedagógicos del Colegio Bilingüe San José Campestre.'}
 </contexto_curricular>
 
-GENERA EL DOCUMENTO ÍNTEGRO Y EXHAUSTIVO EN MARKDOWN RESPETANDO EXACTAMENTE ESTA ESTRUCTURA DE 18 TABLAS Y 8 SECCIONES:
+GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN:
 
 # Secuencia Didáctica: Antes — Durante — Después · Subciclos 3 a 6
 **Colegio Bilingüe San José Campestre**
@@ -152,7 +241,7 @@ GENERA EL DOCUMENTO ÍNTEGRO Y EXHAUSTIVO EN MARKDOWN RESPETANDO EXACTAMENTE EST
 | **Pregunta de sentido del período** | (Pregunta rectora institucional en español y Driving Question completa en inglés para el enfoque bilingüe). |
 | **Aprendizaje esperado de la secuencia** | (Redacción exhaustiva del aprendizaje esperado integrando dimensiones cognitiva, procedimental, contextual y comunicativa en inglés A2). |
 | **Evidencia de aprendizaje principal** | (Nombre técnico y descripción detallada del producto o proyecto Capstone central de la secuencia). |
-| **Componente ACE del período** | **Alcance:** Aplicación disciplinar.<br>**Meta ACE:** En nivel A2/B1, describe y sustenta oralmente en inglés...<br>**Núcleo Lingüístico:** (Mínimo 15 términos disciplinares en inglés con traducción).<br>**Expresiones Funcionales:** (Mínimo 5 estructuras de oración completas para producción oral y escrita). |
+| **Componente ACE del período** | **Alcance:** Aplicación disciplinar en el área.<br>**Meta ACE:** En nivel A2/B1, describe y sustenta oralmente en inglés...<br>**Núcleo Lingüístico:** (Mínimo 15 términos disciplinares en inglés con traducción).<br>**Expresiones Funcionales:** (Mínimo 5 estructuras de oración completas para producción oral y escrita). |
 | **Instrumento · nombre de la nota en Cibercolegios** | (Nombre exacto del instrumento para la planilla con porcentajes de pilares y rúbrica Menú de Desafíos). |
 | **Proyecto integrador al que aporta** | (Articulación exhaustiva con el Proyecto Transversal PRAE Institucional SJB-PGA012 'Biodiversidad en Tienda Nueva: conocer para conservar' y aporte concreto de la secuencia). |
 | **Número de semanas e intervalo de fechas** | ${safeSemanas} |
@@ -196,6 +285,41 @@ GENERA EL DOCUMENTO ÍNTEGRO Y EXHAUSTIVO EN MARKDOWN RESPETANDO EXACTAMENTE EST
 - **Momento 3 - Wrap-up & Metacognición:** (Cierre reflexivo sobre la Driving Question, autoevaluación final en el Tablero de Progreso Anexo A6 y retroalimentación formativa que permite reentrega para mejorar).
 - **Consignas Docentes:** (Evaluación con rúbrica Menú de Desafíos y retroalimentación constructiva).
 - **Ajustes DUA & PIAR:** (Opciones de sustentación asistida y apoyos visuales).
+`
+}
+
+/**
+ * Stage 2 Prompt: Plan de Evaluación Continua, Pilares, Rúbrica Menú de Desafíos, Cibercolegios y Firmas
+ */
+function buildStage2Prompt(params: GeneratePlanningParams, formattedContext: string): string {
+  const { docente, area, grado, periodo, semanas, tema } = params
+  const safeDocente = sanitizeInputText(docente, 200)
+  const safeArea = sanitizeInputText(area, 200)
+  const safeGrado = sanitizeInputText(grado, 100)
+  const safePeriodo = sanitizeInputText(String(periodo), 50)
+  const safeSemanas = sanitizeInputText(semanas || '4 semanas', 150)
+  const safeTema = sanitizeInputText(tema, 300)
+
+  return `Eres el Diseñador Curricular y Asistente Pedagógico Oficial del Colegio Bilingüe San José Campestre (CBSJC).
+Tu misión es generar la **ETAPA 2** de la Planeación Curricular Maestra bajo el formato oficial **SJB-RGA006 Planning Book**.
+Debes producir una redacción EXHAUSTIVA, EXTENSA, PROFUNDA Y EN FORMATO DE TABLAS MARKDOWN ESTRICTAS (mínimo 12.000 a 18.000 caracteres).
+
+REGLAS DE FORMATO OBLIGATORIAS:
+- La Sección 3 DEBE SER UNA TABLA DE 5 COLUMNAS (| Actividad evaluativa | Semana · momento | Pilar(es) que valora | % dentro del pilar | Rúbrica específica |).
+- La Sección 4 DEBE SER UNA TABLA DE 3 COLUMNAS (| Pilar Institucional | Competencia Evaluada | Manifestación en la Evidencia Principal |).
+- La Sección 5 DEBE SER UNA TABLA DE 5 COLUMNAS (| Pilar · Competencia | Sin categoría (1.0 – 3.9) | Bronze (4.0 – 4.5) Esperado | Silver (4.6 – 4.7) Profundización | Gold (4.8 – 5.0) Excelencia |) con DESCRIPTORES ANALÍTICOS DE 6 A 10 LÍNEAS POR CELDA.
+- La Sección 6 DEBE SER EL BLOQUE PARA CIBERCOLEGIOS.
+- La Sección 7 DEBE SER LA BITÁCORA (TABLA 2 COLUMNAS) Y LA TABLA DE 3 FIRMAS (| ELABORÓ | REVISÓ | APROBÓ |).
+
+DATOS DE LA SECUENCIA:
+- Docente(s): ${safeDocente}
+- Área / Asignatura: ${safeArea}
+- Grado / Grupo: ${safeGrado}
+- Período: ${safePeriodo} (Año Lectivo 2026)
+- Semanas: ${safeSemanas}
+- Tema: ${safeTema}
+
+GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN:
 
 ## 3. PLAN DE EVALUACIÓN CONTINUA DE LA SECUENCIA
 
@@ -245,8 +369,38 @@ DESCRIPCIÓN: Pregunta de sentido: ${safeTema} | DBA: Oficial del grado | Eviden
 | ELABORÓ | REVISÓ | APROBÓ |
 |---|---|---|
 | _____________________________<br>${safeDocente}<br>${safeGrado} — Subciclo 4<br>Colegio Bilingüe San José Campestre | _____________________________ <br>Coordinación de Área<br>Comité Curricular y Pedagógico<br>Colegio Bilingüe San José Campestre | _____________________________ <br>Coordinación Académica General<br>Rectoría Institucional<br>Colegio Bilingüe San José Campestre |
+`
+}
 
----
+/**
+ * Stage 3 Prompt: 3 Evaluaciones Finales Completas (10 preguntas, 4 estaciones lab, pitch A2) + Rúbricas Analíticas
+ */
+function buildStage3Prompt(params: GeneratePlanningParams, formattedContext: string): string {
+  const { docente, area, grado, periodo, semanas, tema } = params
+  const safeDocente = sanitizeInputText(docente, 200)
+  const safeArea = sanitizeInputText(area, 200)
+  const safeGrado = sanitizeInputText(grado, 100)
+  const safePeriodo = sanitizeInputText(String(periodo), 50)
+  const safeTema = sanitizeInputText(tema, 300)
+
+  return `Eres el Diseñador Curricular y Asistente Pedagógico Oficial del Colegio Bilingüe San José Campestre (CBSJC).
+Tu misión es generar la **ETAPA 3** (ANEXOS EVALUATIVOS COMPLETOS) bajo el formato oficial **SJB-RGA006 Planning Book**.
+Debes producir una redacción EXHAUSTIVA, EXTENSA, PROFUNDA Y COMPLETA PALABRA POR PALABRA (mínimo 22.000 a 30.000 caracteres solo para esta sección de evaluaciones).
+
+REGLAS DE OBLIGATORIEDAD ABSOLUTA:
+1. CADA PREGUNTA DE LA 1 A LA 10 DEBE ESTAR ESCRITA COMPLETA Y DETALLADA PALABRA POR PALABRA (sin abreviaciones, sin elipsis '...', sin omitir opciones A, B, C, D ni claves de respuesta).
+2. EL PROTOCOLO DE LAS 4 ESTACIONES DE LABORATORIO DEBE DESCRIBIR PROCEDIMIENTOS, MATERIALES, FICHAS DE REGISTRO A ESCALA Y BIOMODELADO EN DETALLE.
+3. EL GUION DE SUSTENTACIÓN ORAL EN INGLÉS A2 DEBE TENER LOS 5 TEXTOS COMPLETOS EN INGLÉS (Apertura, Micro, Macro, PRAE y Defensa).
+4. CADA EVALUACIÓN DEBE LLEVAR SU TABLA DE FICHA TÉCNICA Y SU TABLA DE RÚBRICA ANALÍTICA DE 5 COLUMNAS (| Criterio / Dimensión | Sin Categoría (1.0 - 3.9) | Bronze (4.0 - 4.5) Esperado | Silver (4.6 - 4.7) Profundización | Gold (4.8 - 5.0) Excelencia |).
+
+DATOS DE LA SECUENCIA:
+- Docente: ${safeDocente}
+- Asignatura: ${safeArea}
+- Grado: ${safeGrado}
+- Período: ${safePeriodo}
+- Tema: ${safeTema}
+
+GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN:
 
 ## 8. ANEXO INSTITUCIONAL: TRES (3) EVALUACIONES FINALES Y RÚBRICAS ANALÍTICAS
 
@@ -371,214 +525,71 @@ DESCRIPCIÓN: Pregunta de sentido: ${safeTema} | DBA: Oficial del grado | Eviden
 }
 
 /**
- * Ordered fallback candidate models with high token output capacity.
+ * Main Generation Orchestrator: Multi-Stage Parallel Execution
  */
-export const CANDIDATE_MODELS = [
-  'gemini-3.6-flash',
-  'gemini-3.1-flash-lite',
-  'gemini-3.7-flash',
-  'gemini-3.5-flash',
-  'gemini-flash-latest',
-  'gemini-3.1-flash-lite-preview',
-] as const
-
-const MAX_RETRIES_PER_MODEL = 2
-const BASE_RETRY_DELAY_MS = 1000
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function isTransientError(errorMessage: string): boolean {
-  return (
-    errorMessage.includes('503') ||
-    errorMessage.includes('UNAVAILABLE') ||
-    errorMessage.includes('high demand') ||
-    errorMessage.includes('overloaded') ||
-    errorMessage.includes('429') ||
-    errorMessage.includes('RESOURCE_EXHAUSTED') ||
-    errorMessage.includes('quota') ||
-    errorMessage.includes('rate limit') ||
-    errorMessage.includes('500') ||
-    errorMessage.includes('INTERNAL') ||
-    errorMessage.includes('504') ||
-    errorMessage.includes('DEADLINE_EXCEEDED') ||
-    errorMessage.includes('fetch failed') ||
-    errorMessage.includes('ECONNRESET') ||
-    errorMessage.includes('ETIMEDOUT') ||
-    errorMessage.includes('socket hang up')
-  )
-}
-
-function isNotFoundError(errorMessage: string): boolean {
-  return (
-    errorMessage.includes('404') ||
-    errorMessage.includes('NOT_FOUND') ||
-    errorMessage.includes('is not found') ||
-    errorMessage.includes('not supported') ||
-    errorMessage.includes('deprecated')
-  )
-}
-
-function isAuthError(errorMessage: string): boolean {
-  return (
-    errorMessage.includes('API_KEY_INVALID') ||
-    errorMessage.includes('API key not valid') ||
-    errorMessage.includes('PERMISSION_DENIED') ||
-    errorMessage.includes('403')
-  )
-}
-
 export async function generatePlanningDocument(
   params: GeneratePlanningParams
 ): Promise<GeneratedPlanningOutput> {
-  const genAI = getGenAIClient()
-  const prompt = buildOfficialPrompt(params)
+  const formattedContext = params.contextDocs
+    .map(
+      (doc, i) =>
+        `=== [DOCUMENTO RECTOR / FUENTE ${i + 1}: ${doc.tipo.toUpperCase()} (${doc.filename})] ===\n${sanitizeInputText(doc.content, 12000)}\n`
+    )
+    .join('\n')
 
-  const modelAttemptsLog: Array<{ model: string; error?: string; status: 'success' | 'failed' | 'retried' }> = []
-  let fullText = ''
-  let lastError: Error | null = null
+  const stage1Prompt = buildStage1Prompt(params, formattedContext)
+  const stage2Prompt = buildStage2Prompt(params, formattedContext)
+  const stage3Prompt = buildStage3Prompt(params, formattedContext)
 
-  for (const modelName of CANDIDATE_MODELS) {
-    console.log(`[generator] Evaluating candidate model for exhaustive planning: ${modelName}...`)
+  console.log('[generator] Launching Multi-Stage Generation in parallel for maximum 18+ page depth...')
 
-    let modelSucceeded = false
+  // Execute all 3 stages in parallel
+  const [stage1Text, stage2Text, stage3Text] = await Promise.all([
+    callGenerativeModel(stage1Prompt, 65536),
+    callGenerativeModel(stage2Prompt, 65536),
+    callGenerativeModel(stage3Prompt, 65536),
+  ])
 
-    for (let attempt = 1; attempt <= MAX_RETRIES_PER_MODEL + 1; attempt++) {
-      try {
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: {
-            temperature: 0.35,
-            topP: 0.95,
-            maxOutputTokens: 32768, // Exhaustive 18+ page generation (35k-45k+ chars)
-          },
-        })
+  console.log(`[generator] Stage 1 finished: ${stage1Text.length} chars`)
+  console.log(`[generator] Stage 2 finished: ${stage2Text.length} chars`)
+  console.log(`[generator] Stage 3 finished: ${stage3Text.length} chars`)
 
-        const result = await model.generateContent(prompt)
-        const response = await result.response
-        const text = response.text()
+  // Combine into the master Planning Book Markdown
+  const fullText = [stage1Text, stage2Text, stage3Text].join('\n\n---\n\n')
+  console.log(`[generator] Total Master Curriculum Length: ${fullText.length} chars (Target: 18+ pages)`)
 
-        if (text && text.trim().length > 0) {
-          fullText = text
-          modelSucceeded = true
-          modelAttemptsLog.push({ model: modelName, status: 'success' })
-          console.log(`[generator] Successfully generated exhaustive curriculum using ${modelName} on attempt ${attempt} (${text.length} chars)`)
-          break
-        } else {
-          throw new Error('Respuesta de generación vacía')
-        }
-      } catch (err: unknown) {
-        const rawMessage = err instanceof Error ? err.message : String(err)
-        lastError = err instanceof Error ? err : new Error(rawMessage)
+  // Extract Rubrics Section
+  const rubricsMarkdown = [stage2Text, stage3Text].join('\n\n---\n\n')
 
-        console.warn(
-          `[generator] Model ${modelName} attempt ${attempt}/${MAX_RETRIES_PER_MODEL + 1} failed: ${rawMessage}`
-        )
-
-        if (isAuthError(rawMessage)) {
-          throw new Error(
-            `Error de autenticación con Google Gemini: La clave de API no es válida o no tiene permisos. Detalle: ${rawMessage}`
-          )
-        }
-
-        if (isNotFoundError(rawMessage)) {
-          console.warn(`[generator] Model ${modelName} is not available (404/deprecated). Switching to next candidate...`)
-          modelAttemptsLog.push({ model: modelName, error: `404 Not Found / Deprecated: ${rawMessage}`, status: 'failed' })
-          break
-        }
-
-        if (isTransientError(rawMessage) && attempt <= MAX_RETRIES_PER_MODEL) {
-          const jitter = Math.floor(Math.random() * 500)
-          const backoffDelay = Math.min(BASE_RETRY_DELAY_MS * Math.pow(2, attempt - 1) + jitter, 4000)
-          console.log(`[generator] Retrying ${modelName} in ${backoffDelay}ms due to transient error...`)
-          modelAttemptsLog.push({ model: modelName, error: `Attempt ${attempt}: ${rawMessage}`, status: 'retried' })
-          await delay(backoffDelay)
-          continue
-        }
-
-        modelAttemptsLog.push({ model: modelName, error: rawMessage, status: 'failed' })
-        break
-      }
-    }
-
-    if (modelSucceeded && fullText.trim().length > 0) {
-      break
-    }
+  // Extract Cibercolegios block
+  let cibercolegiosSnippet = ''
+  const ciberMatch = fullText.match(/```(?:text|markdown)?\s*([\s\S]*?)\s*```/i)
+  if (ciberMatch && ciberMatch[1].trim().length > 10) {
+    cibercolegiosSnippet = ciberMatch[1].trim()
+  } else {
+    cibercolegiosSnippet = `NOMBRE (instrumento): Secuencia Didáctica - ${params.tema} · Grado: ${params.grado} · Docente: ${params.docente} · Rúbrica Menú de Desafíos: Bronze (4.0-4.5) · Silver (4.6-4.7) · Gold (4.8-5.0) · Sin categoría (1.0-3.9)`
   }
 
-  if (!fullText || fullText.trim().length === 0) {
-    const errorSummary = modelAttemptsLog
-      .map((l) => `• ${l.model}: ${l.error || l.status}`)
-      .join('\n')
-
-    console.error(`[generator] All candidate models failed. Summary:\n${errorSummary}`)
-
-    const isOverloaded = modelAttemptsLog.some((l) => l.error && isTransientError(l.error))
-    if (isOverloaded) {
-      throw new Error(
-        `Los servidores de Google Gemini presentan alta demanda o límite de tasa en este momento. Se intentaron los modelos (${CANDIDATE_MODELS.join(
-          ', '
-        )}). Por favor espera unos momentos e intenta de nuevo.`
-      )
-    }
-
-    throw new Error(
-      `No se pudo generar la secuencia pedagógica con ningún modelo disponible (${CANDIDATE_MODELS.join(
-        ', '
-      )}). Último error: ${lastError?.message || 'Sin respuesta del proveedor de IA'}`
-    )
+  const excelSpec = {
+    docente: params.docente,
+    area: params.area,
+    grado: params.grado,
+    periodo: String(params.periodo),
+    semanas: params.semanas || '4 semanas',
+    tema: params.tema,
+    evidenciaPrincipal: `Evidencia principal: ${params.tema}`,
+    actividades: [
+      { nombre: 'Actividad 1 (SABER - Conceptos & Teoría)', pilar: 'SABER' as const, porcentaje: 35 },
+      { nombre: 'Actividad 2 (SABER HACER - Producto ACE)', pilar: 'SABER HACER' as const, porcentaje: 35 },
+      { nombre: 'Actividad 3 (SABER SER - Autonomía & Metacognición)', pilar: 'SABER SER' as const, porcentaje: 20 },
+      { nombre: 'Actividad 4 (SABER CONVIVIR - Trabajo en Equipo)', pilar: 'SABER CONVIVIR' as const, porcentaje: 10 },
+    ],
   }
 
-  try {
-    // Extract Rubrics Section (Section 5 and/or Anexos 8)
-    let rubricsMarkdown = ''
-    let cibercolegiosSnippet = ''
-
-    const rubricsSectionMatch = fullText.match(/(?:##\s*5\.?|###\s*5\.?|#\s*5\.?)\s*R[UÚ]BRICA[\s\S]*?(?=(?:##\s*6\.?|###\s*6\.?|#\s*6\.?)\s*BLOQUE|$)/i)
-    const annexesRubricMatch = fullText.match(/(?:##\s*8\.?|###\s*8\.?|#\s*8\.?)\s*ANEXO[\s\S]*$/i)
-
-    if (rubricsSectionMatch || annexesRubricMatch) {
-      rubricsMarkdown = [rubricsSectionMatch?.[0] || '', annexesRubricMatch?.[0] || ''].filter(Boolean).join('\n\n---\n\n')
-    } else {
-      rubricsMarkdown = fullText
-    }
-
-    const ciberMatch = fullText.match(/```(?:text|markdown)?\s*([\s\S]*?)\s*```/i)
-    if (ciberMatch && ciberMatch[1].trim().length > 10) {
-      cibercolegiosSnippet = ciberMatch[1].trim()
-    } else {
-      cibercolegiosSnippet = `NOMBRE (instrumento): Secuencia Didáctica - ${params.tema} · Grado: ${params.grado} · Docente: ${params.docente} · Rúbrica Menú de Desafíos: Bronze (4.0-4.5) · Silver (4.6-4.7) · Gold (4.8-5.0) · Sin categoría (1.0-3.9)`
-    }
-
-    const excelSpec = {
-      docente: params.docente,
-      area: params.area,
-      grado: params.grado,
-      periodo: String(params.periodo),
-      semanas: params.semanas || '4 semanas',
-      tema: params.tema,
-      evidenciaPrincipal: `Evidencia principal: ${params.tema}`,
-      actividades: [
-        { nombre: 'Actividad 1 (SABER - Conceptos & Teoría)', pilar: 'SABER' as const, porcentaje: 35 },
-        { nombre: 'Actividad 2 (SABER HACER - Producto ACE)', pilar: 'SABER HACER' as const, porcentaje: 35 },
-        { nombre: 'Actividad 3 (SABER SER - Autonomía & Metacognición)', pilar: 'SABER SER' as const, porcentaje: 20 },
-        { nombre: 'Actividad 4 (SABER CONVIVIR - Trabajo en Equipo)', pilar: 'SABER CONVIVIR' as const, porcentaje: 10 },
-      ],
-    }
-
-    return {
-      planningBookMarkdown: fullText,
-      rubricsMarkdown,
-      cibercolegiosSnippet,
-      excelSpec,
-    }
-  } catch (error) {
-    console.error('[generator] Error processing generated output:', error)
-    throw new Error(
-      `Error en el procesamiento del resultado generado: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    )
+  return {
+    planningBookMarkdown: fullText,
+    rubricsMarkdown,
+    cibercolegiosSnippet,
+    excelSpec,
   }
 }

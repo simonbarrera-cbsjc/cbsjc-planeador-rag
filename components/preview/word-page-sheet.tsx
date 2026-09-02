@@ -30,6 +30,36 @@ interface WordPageSheetProps {
   onDeleteBlock: (blockId: string) => void
 }
 
+/**
+ * Robust HTML formatter that cleans raw markdown symbols (**bold**, *italic*, <br>)
+ * and converts them to genuine formatted HTML elements.
+ */
+function cleanAndFormatHtml(text: string | undefined | null): string {
+  if (!text) return ''
+  let s = String(text).trim()
+
+  // 1. Convert <br> or <br/> tags to actual line break
+  s = s.replace(/<br\s*\/?>/gi, '<br />')
+
+  // 2. Bold italic: ***text*** or **_text_**
+  s = s.replace(/\*\*\*(.*?)\*\*\*/g, '<strong class="text-[#0E1B4D] font-bold"><em>$1</em></strong>')
+  s = s.replace(/\*\*_(.*?)_\*\*/g, '<strong class="text-[#0E1B4D] font-bold"><em>$1</em></strong>')
+
+  // 3. Bold: **text**
+  s = s.replace(/\*\*(.*?)\*\*/g, '<strong class="text-[#0E1B4D] font-bold">$1</strong>')
+
+  // 4. Italic: *text* (avoiding remaining double asterisks)
+  s = s.replace(/(^|[^*])\*([^*]+?)\*([^*]|$)/g, '$1<em>$2</em>$3')
+
+  // 5. Italic with underscores: _text_
+  s = s.replace(/(^|[^_])_([^_]+?)_([^_]|$)/g, '$1<em>$2</em>$3')
+
+  // 6. Remove any leftover loose asterisks so they NEVER appear to the teacher
+  s = s.replace(/\*/g, '')
+
+  return s
+}
+
 export function WordPageSheet({
   page,
   pageIndex,
@@ -114,9 +144,9 @@ export function WordPageSheet({
   const isFirstPage = page.pageNumber === 1
 
   return (
-    <div className="relative group/page flex flex-col items-center mb-10 select-text">
+    <div className="relative group/page flex flex-col items-center mb-8 select-text">
       {/* Page Header Indicator Label */}
-      <div className="w-full max-w-4xl flex items-center justify-between text-[11px] font-semibold text-slate-500 mb-2 px-2 print:hidden">
+      <div className="w-full max-w-4xl flex items-center justify-between text-[11px] font-semibold text-slate-500 mb-1.5 px-2 print:hidden">
         <div className="flex items-center gap-2">
           <span className="inline-block w-2 h-2 rounded-full bg-[#0E1B4D]" />
           <span className="uppercase tracking-wider font-bold text-[#0E1B4D]">
@@ -135,16 +165,16 @@ export function WordPageSheet({
           transform: zoomScale !== 1 ? `scale(${zoomScale})` : undefined,
           transformOrigin: 'top center',
         }}
-        className={`w-full max-w-4xl bg-white text-slate-900 border border-slate-300/80 shadow-[0_8px_30px_rgba(0,0,0,0.1),0_1px_3px_rgba(0,0,0,0.06)] rounded-[2px] transition-shadow duration-200 p-8 sm:p-12 md:p-14 min-h-[1123px] flex flex-col justify-between relative print:shadow-none print:border-none print:p-0 print:m-0 print:w-full print:max-w-none`}
+        className={`w-full max-w-4xl bg-white text-slate-900 border border-slate-300/80 shadow-[0_8px_30px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.04)] rounded-[2px] transition-shadow duration-200 p-8 sm:p-12 md:p-14 min-h-[1123px] flex flex-col justify-between relative print:shadow-none print:border-none print:p-0 print:m-0 print:w-full print:max-w-none`}
       >
         {/* TOP OF PAGE: OFFICIAL HEADER */}
-        <div className="space-y-4">
+        <div>
           {isFirstPage ? (
             /* Official 3-Column Header Table on Page 1 */
-            <div className="border-2 border-slate-700 rounded-sm overflow-hidden grid grid-cols-12 text-xs mb-6 bg-white shadow-xs">
+            <div className="border-2 border-slate-700 rounded-sm overflow-hidden grid grid-cols-12 text-xs mb-4 bg-white shadow-xs">
               {/* Column 1: CBSJC Crest */}
-              <div className="col-span-2 p-3 bg-white border-r-2 border-slate-700 flex flex-col items-center justify-center">
-                <div className="relative w-16 h-16">
+              <div className="col-span-2 p-2.5 bg-white border-r-2 border-slate-700 flex flex-col items-center justify-center">
+                <div className="relative w-14 h-14">
                   <Image
                     src="/cbsjc-crest.png"
                     alt="Escudo Oficial CBSJC"
@@ -156,7 +186,7 @@ export function WordPageSheet({
               </div>
 
               {/* Column 2: Institution & Document Title */}
-              <div className="col-span-7 p-3 border-r-2 border-slate-700 text-center flex flex-col justify-center bg-white space-y-0.5">
+              <div className="col-span-7 p-2.5 border-r-2 border-slate-700 text-center flex flex-col justify-center bg-white space-y-0.5">
                 <h2 className="font-extrabold text-[#0E1B4D] text-xs uppercase tracking-wide">
                   Colegio Bilingüe San José Campestre
                 </h2>
@@ -169,7 +199,7 @@ export function WordPageSheet({
               </div>
 
               {/* Column 3: Quality Management Code & Metadata */}
-              <div className="col-span-3 p-3 bg-slate-50 flex flex-col justify-center text-[10px] text-right space-y-0.5">
+              <div className="col-span-3 p-2.5 bg-slate-50 flex flex-col justify-center text-[10px] text-right space-y-0.5">
                 <p className="font-bold text-[#0E1B4D]">CÓDIGO: SJB-RGA006</p>
                 <p className="text-slate-600">VERSIÓN: 4</p>
                 <p className="text-slate-600">VIGENCIA: 2026</p>
@@ -180,7 +210,7 @@ export function WordPageSheet({
             </div>
           ) : (
             /* Running Header on Page 2+ */
-            <div className="border-b border-slate-300 pb-2 mb-6 flex items-center justify-between text-[10px] text-slate-500 font-medium">
+            <div className="border-b border-slate-300 pb-1.5 mb-4 flex items-center justify-between text-[10px] text-slate-500 font-medium">
               <span className="font-bold text-[#0E1B4D] uppercase tracking-wider">
                 Colegio Bilingüe San José Campestre · Formato RGA006
               </span>
@@ -190,8 +220,8 @@ export function WordPageSheet({
             </div>
           )}
 
-          {/* PAGE BODY BLOCKS */}
-          <div className="space-y-3.5">
+          {/* PAGE BODY BLOCKS - TIGHT PROFESSIONAL WORD SPACING */}
+          <div className="space-y-1.5">
             {page.blocks.map((block) => {
               const isActive = activeBlockId === block.id
 
@@ -201,9 +231,9 @@ export function WordPageSheet({
                   onFocus={() => setActiveBlockId(block.id)}
                   className={`relative group/block rounded transition-all duration-150 ${
                     isEditable && isActive
-                      ? 'ring-1 ring-[#0E1B4D]/30 bg-slate-50/40 p-1'
+                      ? 'ring-1 ring-[#0E1B4D]/30 bg-slate-50/40 p-0.5'
                       : isEditable
-                      ? 'hover:bg-slate-50/30 p-1'
+                      ? 'hover:bg-slate-50/30 p-0.5'
                       : ''
                   }`}
                 >
@@ -215,7 +245,7 @@ export function WordPageSheet({
                       onBlur={(e) =>
                         onUpdateBlock(block.id, { content: e.currentTarget.textContent || '' })
                       }
-                      className="text-lg font-black text-[#0E1B4D] uppercase tracking-wide border-b-2 border-[#0E1B4D] pb-1.5 mt-4 mb-2 outline-none focus:bg-blue-50/30 px-1 rounded"
+                      className="text-base font-black text-[#0E1B4D] uppercase tracking-wide border-b-2 border-[#0E1B4D] pb-1 mt-3 mb-1.5 outline-none focus:bg-blue-50/30 px-1 rounded"
                     >
                       {block.content}
                     </div>
@@ -228,7 +258,7 @@ export function WordPageSheet({
                       onBlur={(e) =>
                         onUpdateBlock(block.id, { content: e.currentTarget.textContent || '' })
                       }
-                      className="text-xs font-bold text-[#0E1B4D] uppercase tracking-wider flex items-center gap-2 mt-4 mb-2 outline-none focus:bg-blue-50/30 px-1 rounded"
+                      className="text-xs font-bold text-[#0E1B4D] uppercase tracking-wider flex items-center gap-1.5 mt-3 mb-1 outline-none focus:bg-blue-50/30 px-1 rounded"
                     >
                       <span className="w-2 h-2 rounded-full bg-[#D71921] shrink-0" />
                       <span>{block.content}</span>
@@ -242,7 +272,7 @@ export function WordPageSheet({
                       onBlur={(e) =>
                         onUpdateBlock(block.id, { content: e.currentTarget.textContent || '' })
                       }
-                      className="text-xs font-bold text-[#D71921] uppercase tracking-wide mt-3 mb-1 outline-none focus:bg-red-50/30 px-1 rounded"
+                      className="text-xs font-bold text-[#D71921] uppercase tracking-wide mt-2 mb-0.5 outline-none focus:bg-red-50/30 px-1 rounded"
                     >
                       {block.content}
                     </div>
@@ -255,7 +285,7 @@ export function WordPageSheet({
                       onBlur={(e) =>
                         onUpdateBlock(block.id, { content: e.currentTarget.textContent || '' })
                       }
-                      className="text-[11px] font-bold text-slate-800 uppercase mt-2.5 mb-1 outline-none focus:bg-slate-100 px-1 rounded"
+                      className="text-[11px] font-bold text-slate-800 uppercase mt-1.5 mb-0.5 outline-none focus:bg-slate-100 px-1 rounded"
                     >
                       {block.content}
                     </div>
@@ -266,91 +296,93 @@ export function WordPageSheet({
                       contentEditable={isEditable}
                       suppressContentEditableWarning
                       onBlur={(e) =>
-                        onUpdateBlock(block.id, { content: (e.currentTarget.innerHTML || '').replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**').replace(/<[^>]+>/g, '') })
+                        onUpdateBlock(block.id, { content: e.currentTarget.innerText || e.currentTarget.textContent || '' })
                       }
-                      className="text-xs text-slate-800 leading-relaxed outline-none focus:bg-blue-50/30 px-1 py-0.5 rounded"
+                      className="text-xs text-slate-800 leading-relaxed outline-none focus:bg-blue-50/30 px-1 py-0.5 rounded my-0.5"
                       dangerouslySetInnerHTML={{
-                        __html: block.content.replace(
-                          /\*\*(.*?)\*\*/g,
-                          '<strong class="text-[#0E1B4D] font-bold">$1</strong>'
-                        ),
+                        __html: cleanAndFormatHtml(block.content),
                       }}
                     />
                   )}
 
                   {block.type === 'bullet' && (
-                    <div className="flex items-start gap-2 text-xs text-slate-800 my-1 pl-2">
+                    <div className="flex items-start gap-2 text-xs text-slate-800 my-0.5 pl-2">
                       <span className="text-[#D71921] font-bold leading-relaxed shrink-0">•</span>
                       <div
                         contentEditable={isEditable}
                         suppressContentEditableWarning
                         onBlur={(e) =>
-                          onUpdateBlock(block.id, { content: (e.currentTarget.innerHTML || '').replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**').replace(/<[^>]+>/g, '') })
+                          onUpdateBlock(block.id, { content: e.currentTarget.innerText || e.currentTarget.textContent || '' })
                         }
                         className="flex-1 leading-relaxed outline-none focus:bg-blue-50/30 px-1 rounded"
                         dangerouslySetInnerHTML={{
-                          __html: block.content.replace(
-                            /\*\*(.*?)\*\*/g,
-                            '<strong class="text-[#0E1B4D] font-bold">$1</strong>'
-                          ),
+                          __html: cleanAndFormatHtml(block.content),
                         }}
                       />
                     </div>
                   )}
 
                   {block.type === 'number-list' && (
-                    <div className="flex items-start gap-2 text-xs text-slate-800 my-1 pl-2">
+                    <div className="flex items-start gap-2 text-xs text-slate-800 my-0.5 pl-2">
                       <span className="text-[#0E1B4D] font-bold leading-relaxed shrink-0">1.</span>
                       <div
                         contentEditable={isEditable}
                         suppressContentEditableWarning
                         onBlur={(e) =>
-                          onUpdateBlock(block.id, { content: e.currentTarget.textContent || '' })
+                          onUpdateBlock(block.id, { content: e.currentTarget.innerText || e.currentTarget.textContent || '' })
                         }
                         className="flex-1 leading-relaxed outline-none focus:bg-blue-50/30 px-1 rounded"
-                      >
-                        {block.content}
-                      </div>
+                        dangerouslySetInnerHTML={{
+                          __html: cleanAndFormatHtml(block.content),
+                        }}
+                      />
                     </div>
                   )}
 
                   {block.type === 'divider' && (
-                    <div className="my-4 border-b border-slate-300" />
+                    <div className="my-2 border-b border-slate-300" />
                   )}
 
                   {block.type === 'code' && (
-                    <pre className="p-3 bg-slate-900 text-slate-100 text-[11px] rounded-lg font-mono overflow-x-auto whitespace-pre-wrap my-2 border border-slate-700">
+                    <pre className="p-2.5 bg-slate-900 text-slate-100 text-[11px] rounded-lg font-mono overflow-x-auto whitespace-pre-wrap my-1.5 border border-slate-700">
                       <code>{block.content}</code>
                     </pre>
                   )}
 
-                  {/* TABLE BLOCK RENDERER */}
+                  {/* TABLE BLOCK RENDERER WITH WORD STYLING */}
                   {block.type === 'table' && block.tableData && (
-                    <div className="my-3 overflow-x-auto rounded-lg border border-slate-300 shadow-xs bg-white">
+                    <div className="my-2 overflow-x-auto rounded-lg border border-slate-300 shadow-xs bg-white">
                       <table className="w-full text-xs border-collapse">
                         <thead>
                           <tr className="bg-[#0E1B4D] text-white">
                             {block.tableData.headers.map((headerText, cIdx) => (
                               <th
                                 key={cIdx}
-                                className="p-2.5 font-bold border border-slate-300 text-left text-[11px] tracking-wide"
+                                className="p-2 font-bold border border-slate-300 text-left text-[11px] tracking-wide"
                               >
                                 {isEditable ? (
-                                  <input
-                                    type="text"
-                                    value={headerText}
-                                    onChange={(e) =>
+                                  <div
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onBlur={(e) =>
                                       handleHeaderCellChange(
                                         block.id,
                                         block.tableData!,
                                         cIdx,
-                                        e.target.value
+                                        e.currentTarget.textContent || ''
                                       )
                                     }
-                                    className="w-full bg-transparent text-white font-bold outline-none border-b border-white/40 focus:border-white text-[11px]"
+                                    className="w-full bg-transparent text-white font-bold outline-none focus:bg-white/20 p-0.5 rounded text-[11px]"
+                                    dangerouslySetInnerHTML={{
+                                      __html: cleanAndFormatHtml(headerText),
+                                    }}
                                   />
                                 ) : (
-                                  headerText
+                                  <span
+                                    dangerouslySetInnerHTML={{
+                                      __html: cleanAndFormatHtml(headerText),
+                                    }}
+                                  />
                                 )}
                               </th>
                             ))}
@@ -367,37 +399,37 @@ export function WordPageSheet({
                                 } hover:bg-blue-50/30`}
                               >
                                 {row.map((cellText, cIdx) => {
-                                  // First column in 2-column key-value tables is formatted as header-like
                                   const isKeyCol = block.tableData!.headers.length === 2 && cIdx === 0
 
                                   return (
                                     <td
                                       key={cIdx}
-                                      className={`p-2.5 border border-slate-200 text-slate-800 text-xs leading-relaxed align-top ${
-                                        isKeyCol ? 'font-bold text-[#0E1B4D] bg-slate-100/40 w-1/3' : ''
+                                      className={`p-2 border border-slate-200 text-slate-800 text-xs leading-relaxed align-top ${
+                                        isKeyCol ? 'font-bold text-[#0E1B4D] bg-slate-100/50 w-1/3' : ''
                                       }`}
                                     >
                                       {isEditable ? (
-                                        <textarea
-                                          value={cellText}
-                                          rows={Math.max(1, Math.ceil(cellText.length / 45))}
-                                          onChange={(e) =>
+                                        <div
+                                          contentEditable
+                                          suppressContentEditableWarning
+                                          onBlur={(e) =>
                                             handleCellChange(
                                               block.id,
                                               block.tableData!,
                                               rIdx,
                                               cIdx,
-                                              e.target.value
+                                              e.currentTarget.innerHTML || ''
                                             )
                                           }
-                                          className="w-full bg-transparent resize-y outline-none focus:bg-white focus:ring-1 focus:ring-[#0E1B4D]/40 p-1 rounded text-xs leading-relaxed border-0 font-sans"
+                                          className="w-full bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-[#0E1B4D]/40 p-1 rounded text-xs leading-relaxed font-sans"
+                                          dangerouslySetInnerHTML={{
+                                            __html: cleanAndFormatHtml(cellText),
+                                          }}
                                         />
                                       ) : (
                                         <span
                                           dangerouslySetInnerHTML={{
-                                            __html: cellText
-                                              .replace(/\*\*(.*?)\*\*/g, '<strong class="text-[#0E1B4D] font-bold">$1</strong>')
-                                              .replace(/<br\s*\/?>/g, '<br />'),
+                                            __html: cleanAndFormatHtml(cellText),
                                           }}
                                         />
                                       )}
@@ -406,7 +438,7 @@ export function WordPageSheet({
                                 })}
 
                                 {isEditable && (
-                                  <td className="w-8 p-1 border border-slate-200 text-center opacity-0 group-hover/row:opacity-100 transition-opacity print:hidden">
+                                  <td className="w-7 p-1 border border-slate-200 text-center opacity-0 group-hover/row:opacity-100 transition-opacity print:hidden">
                                     <button
                                       onClick={() =>
                                         handleDeleteTableRow(block.id, block.tableData!, rIdx)
@@ -426,14 +458,14 @@ export function WordPageSheet({
 
                       {/* Add Table Row Button */}
                       {isEditable && (
-                        <div className="p-1.5 bg-slate-50 border-t border-slate-200 flex justify-end print:hidden">
+                        <div className="p-1 bg-slate-50 border-t border-slate-200 flex justify-end print:hidden">
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => handleAddTableRow(block.id, block.tableData!)}
-                            className="h-6 px-2 text-[10px] font-bold text-[#0E1B4D] hover:bg-slate-200 rounded"
+                            className="h-5 px-2 text-[10px] font-bold text-[#0E1B4D] hover:bg-slate-200 rounded"
                           >
-                            <Plus className="h-3 w-3 mr-1" />
+                            <Plus className="h-2.5 w-2.5 mr-1" />
                             Añadir Fila a Tabla
                           </Button>
                         </div>
@@ -441,35 +473,20 @@ export function WordPageSheet({
                     </div>
                   )}
 
-                  {/* Block Hover Actions (Add Block below / Delete block) */}
+                  {/* Block Hover Actions */}
                   {isEditable && (
-                    <div className="absolute right-0 -bottom-3 opacity-0 group-hover/block:opacity-100 transition-opacity z-10 flex items-center gap-1 bg-white border border-slate-300 shadow-md rounded-md px-1.5 py-0.5 print:hidden">
+                    <div className="absolute right-0 -bottom-2.5 opacity-0 group-hover/block:opacity-100 transition-opacity z-10 flex items-center gap-1 bg-white border border-slate-300 shadow-md rounded-md px-1 py-0.5 print:hidden">
                       <button
                         onClick={() => onAddBlock(block.id, 'paragraph')}
                         title="Añadir Párrafo Abajo"
-                        className="p-1 text-slate-600 hover:text-[#0E1B4D] rounded"
+                        className="p-0.5 text-slate-600 hover:text-[#0E1B4D] rounded"
                       >
-                        <AlignLeft className="h-3 w-3" />
+                        <Plus className="h-3 w-3" />
                       </button>
-                      <button
-                        onClick={() => onAddBlock(block.id, 'bullet')}
-                        title="Añadir Viñeta Abajo"
-                        className="p-1 text-slate-600 hover:text-[#0E1B4D] rounded"
-                      >
-                        <List className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={() => onAddBlock(block.id, 'h3')}
-                        title="Añadir Subtítulo Abajo"
-                        className="p-1 text-slate-600 hover:text-[#0E1B4D] rounded"
-                      >
-                        <Heading2 className="h-3 w-3" />
-                      </button>
-                      <div className="w-px h-3 bg-slate-200 mx-0.5" />
                       <button
                         onClick={() => onDeleteBlock(block.id)}
                         title="Eliminar Bloque"
-                        className="p-1 text-slate-400 hover:text-[#D71921] rounded"
+                        className="p-0.5 text-slate-400 hover:text-[#D71921] rounded"
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>
@@ -482,18 +499,13 @@ export function WordPageSheet({
         </div>
 
         {/* BOTTOM OF PAGE: OFFICIAL RUNNING FOOTER */}
-        <div className="border-t border-slate-300 pt-3 mt-8 flex flex-col sm:flex-row items-center justify-between text-[9px] text-slate-500 font-medium">
+        <div className="border-t border-slate-300 pt-1.5 mt-4 flex items-center justify-between text-[10px] text-slate-500 font-medium">
           <div className="flex items-center gap-2">
             <span className="font-bold text-[#0E1B4D]">Colegio Bilingüe San José Campestre</span>
-            <span className="text-slate-400">·</span>
-            <span>Sistema de Gestión de Calidad Académica</span>
+            <span>· Formato RGA006</span>
           </div>
-          <div className="flex items-center gap-2 mt-1 sm:mt-0 font-mono">
-            <span>SJB-RGA006 (V4)</span>
-            <span className="text-slate-400">·</span>
-            <span className="font-bold text-slate-700">
-              Página {page.pageNumber} de {totalPages}
-            </span>
+          <div className="font-mono text-slate-400">
+            Página {page.pageNumber} de {totalPages}
           </div>
         </div>
       </div>
