@@ -31,19 +31,19 @@ export async function createDeliverablesZip(params: ZipPackageParams): Promise<B
   }
 
   if (params.planningPdf) {
-    folder.file(`1_Planning_Book_SJB-RGA006_${cleanTitle}.pdf`, params.planningPdf)
+    folder.file(`2_Planning_Book_SJB-RGA006_${cleanTitle}.pdf`, params.planningPdf)
   }
 
   if (params.rubricsDocx) {
-    folder.file(`2_Rubricas_Evaluacion_${cleanTitle}.docx`, params.rubricsDocx)
+    folder.file(`3_Rubricas_Menu_Desafios_${cleanTitle}.docx`, params.rubricsDocx)
   }
 
   if (params.excelSpreadsheet) {
-    folder.file(`3_Planilla_Notas_${cleanTitle}.xlsx`, params.excelSpreadsheet)
+    folder.file(`4_Planilla_Notas_${cleanTitle}.xlsx`, params.excelSpreadsheet)
   }
 
   if (params.cibercolegiosTxt && params.cibercolegiosTxt.trim().length > 0) {
-    folder.file(`4_Traslado_Cibercolegios_${cleanTitle}.txt`, params.cibercolegiosTxt.trim())
+    folder.file(`5_Traslado_Cibercolegios_${cleanTitle}.txt`, params.cibercolegiosTxt.trim())
   }
 
   const content = await zip.generateAsync({

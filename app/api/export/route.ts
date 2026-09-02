@@ -19,6 +19,7 @@ import { generatePdf } from '@/lib/export/pdf'
 import { generateDocx } from '@/lib/export/docx'
 import { generateGradeSpreadsheet } from '@/lib/export/excel'
 import { createDeliverablesZip } from '@/lib/export/zip'
+import { createGoogleDoc } from '@/lib/export/gdocs'
 import { formatDate } from '@/lib/utils'
 import {
   rateLimit,
@@ -239,7 +240,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return addRateLimitHeaders(successResponse, rateLimitResult)
     }
 
-    // 5. Complete ZIP Package with all 3 Deliverables
+    // 5. Complete ZIP Package with all 4 Deliverables (Planning Book DOCX & PDF, Rubrics DOCX, Excel Planilla)
     if (format === 'zip') {
       const [planningDocxBuf, planningPdfBuf, rubricsDocxBuf, excelBuf] = await Promise.all([
         generateDocx({
@@ -257,7 +258,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           metadata: { area: doc.area, nivel: doc.nivel, grado: doc.grado || undefined, periodo: doc.periodo || undefined, date: formattedDate, authorName },
         }),
         generateDocx({
-          title: `Rúbricas: ${doc.title}`,
+          title: `Rúbricas Menú de Desafíos: ${doc.title}`,
           content: rubricsMarkdown,
           documentType: 'planeador',
           language: doc.language as 'es' | 'en',
@@ -284,6 +285,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const storagePath = `${user.id}/${documentId}/${safeTitle}-paquete-completo.zip`
       const { signedUrl } = await uploadAndSign(storagePath, zipBuffer, 'application/zip')
       const successResponse = NextResponse.json({ success: true, downloadUrl: signedUrl })
+      return addRateLimitHeaders(successResponse, rateLimitResult)
+    }
+
+    // 6. Google Docs Export
+    if (format === 'gdocs') {
+      const { docUrl } = await createGoogleDoc({
+        title: doc.title,
+        content: planningMarkdown,
+        userEmail: user.email,
+      })
+      const successResponse = NextResponse.json({ success: true, downloadUrl: docUrl })
       return addRateLimitHeaders(successResponse, rateLimitResult)
     }
 

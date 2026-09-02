@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect, use, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -25,6 +25,13 @@ import {
   Loader2,
   FolderArchive,
   TableProperties,
+  Edit3,
+  Eye,
+  FileCode,
+  Download,
+  HelpCircle,
+  Clock,
+  ShieldCheck,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { formatDate, formatArea } from '@/lib/utils'
@@ -42,16 +49,21 @@ export default function PreviewPage({ params }: PreviewPageProps) {
   const [document, setDocument] = useState<GeneratedDocument | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Sub-document states
+  // Document states
   const [planningMarkdown, setPlanningMarkdown] = useState('')
   const [rubricsMarkdown, setRubricsMarkdown] = useState('')
   const [cibercolegiosSnippet, setCibercolegiosSnippet] = useState('')
   const [excelMetadata, setExcelMetadata] = useState<any>(null)
 
+  // Editor mode: 'visual' (Word-like WYSIWYG) vs 'markdown'
+  const [viewMode, setViewMode] = useState<'visual' | 'markdown'>('visual')
+
   const [isSaving, setIsSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [exportingFormat, setExportingFormat] = useState<string | null>(null)
   const [copiedSnippet, setCopiedSnippet] = useState(false)
+
+  const editableDocumentRef = useRef<HTMLDivElement>(null)
 
   // Fetch document details
   useEffect(() => {
@@ -63,7 +75,6 @@ export default function PreviewPage({ params }: PreviewPageProps) {
         if (json.success && json.document) {
           setDocument(json.document)
 
-          // Try parsing combined JSON payload
           try {
             const parsed = JSON.parse(json.document.content)
             if (parsed.planningBookMarkdown) {
@@ -74,7 +85,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
               return
             }
           } catch {
-            // plain markdown
+            // plain markdown fallback
           }
 
           setPlanningMarkdown(json.document.content)
@@ -135,12 +146,11 @@ export default function PreviewPage({ params }: PreviewPageProps) {
     setTimeout(() => setCopiedSnippet(false), 3000)
   }
 
-  // Export handler
+  // Export handler (Word, PDF, Excel, ZIP)
   const handleExport = async (format: 'pdf' | 'docx' | 'rubrics_docx' | 'excel' | 'zip') => {
     if (!document) return
     try {
       setExportingFormat(format)
-      // Save changes first
       await handleSave()
 
       const res = await fetch('/api/export', {
@@ -162,7 +172,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
         window.document.body.appendChild(a)
         a.click()
         window.document.body.removeChild(a)
-        toast({ title: 'Descarga iniciada', description: `Tu archivo ${ext.toUpperCase()} está listo.`, variant: 'success' })
+        toast({ title: 'Descarga iniciada', description: `Tu archivo ${ext.toUpperCase()} oficial está listo.`, variant: 'success' })
       }
     } catch (err) {
       console.error('Export error:', err)
@@ -176,11 +186,133 @@ export default function PreviewPage({ params }: PreviewPageProps) {
     }
   }
 
+  // Helper to render markdown lines into interactive Word-like HTML elements
+  const renderVisualDocument = (content: string) => {
+    if (!content) return null
+    const lines = content.split('\n')
+    const elements: React.ReactNode[] = []
+    let currentTableRows: string[][] = []
+    let tableKey = 0
+
+    const flushTable = () => {
+      if (currentTableRows.length > 0) {
+        const rows = [...currentTableRows]
+        const isHeader = rows[0]
+        elements.push(
+          <div key={`tbl-${tableKey++}`} className="my-4 overflow-x-auto rounded-xl border border-slate-300 shadow-sm bg-white">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-[#0E1B4D] text-white">
+                  {isHeader.map((col, cIdx) => (
+                    <th key={cIdx} className="p-3 font-bold border border-slate-300 text-left">
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(1).map((row, rIdx) => (
+                  <tr key={rIdx} className={rIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                    {row.map((col, cIdx) => (
+                      <td key={cIdx} className="p-2.5 border border-slate-200 text-slate-800 leading-relaxed">
+                        {col}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+        currentTableRows = []
+      }
+    }
+
+    lines.forEach((rawLine, idx) => {
+      const line = rawLine.trim()
+
+      if (line.startsWith('|') && line.endsWith('|')) {
+        if (/^\|[\s\-:|]+\|$/.test(line)) return
+        const cols = line
+          .slice(1, -1)
+          .split('|')
+          .map((c) => c.trim().replace(/\*\*/g, ''))
+        currentTableRows.push(cols)
+        return
+      } else {
+        flushTable()
+      }
+
+      if (!line) {
+        elements.push(<div key={idx} className="h-2" />)
+        return
+      }
+
+      if (line.startsWith('# ')) {
+        elements.push(
+          <h1 key={idx} className="text-xl font-black text-[#0E1B4D] mt-6 mb-3 border-b-2 border-[#0E1B4D] pb-2">
+            {line.substring(2).replace(/\*\*/g, '')}
+          </h1>
+        )
+      } else if (line.startsWith('## ')) {
+        elements.push(
+          <h2 key={idx} className="text-base font-bold text-[#0E1B4D] mt-5 mb-2 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#D71921]" />
+            {line.substring(3).replace(/\*\*/g, '')}
+          </h2>
+        )
+      } else if (line.startsWith('### ')) {
+        elements.push(
+          <h3 key={idx} className="text-sm font-bold text-[#D71921] mt-4 mb-1">
+            {line.substring(4).replace(/\*\*/g, '')}
+          </h3>
+        )
+      } else if (line.startsWith('#### ')) {
+        elements.push(
+          <h4 key={idx} className="text-xs font-bold text-slate-800 mt-3 mb-1">
+            {line.substring(5).replace(/\*\*/g, '')}
+          </h4>
+        )
+      } else if (line.startsWith('- ') || line.startsWith('* ') || /^\d+\.\s/.test(line)) {
+        const clean = line.replace(/^[-*]\s+|\d+\.\s+/, '')
+        elements.push(
+          <div key={idx} className="flex items-start gap-2 text-xs text-slate-700 my-1 pl-3">
+            <span className="text-[#D71921] font-bold">•</span>
+            <span className="flex-1 leading-relaxed">
+              {clean.includes('**') ? (
+                <span
+                  dangerouslySetInnerHTML={{
+                    __html: clean.replace(/\*\*(.*?)\*\*/g, '<strong class="text-[#0E1B4D] font-bold">$1</strong>'),
+                  }}
+                />
+              ) : (
+                clean
+              )}
+            </span>
+          </div>
+        )
+      } else {
+        elements.push(
+          <p
+            key={idx}
+            className="text-xs text-slate-800 leading-relaxed my-2"
+            dangerouslySetInnerHTML={{
+              __html: line.replace(/\*\*(.*?)\*\*/g, '<strong class="text-[#0E1B4D] font-bold">$1</strong>'),
+            }}
+          />
+        )
+      }
+    })
+
+    flushTable()
+    return elements
+  }
+
   if (loading) {
     return (
       <div className="p-16 text-center space-y-3">
         <Loader2 className="h-8 w-8 animate-spin text-[#162874] mx-auto" />
-        <p className="text-sm font-semibold text-slate-700">Cargando paquete curricular CBSJC...</p>
+        <p className="text-sm font-semibold text-slate-700">Cargando paquete curricular CBSJC (18+ páginas)...</p>
       </div>
     )
   }
@@ -197,9 +329,9 @@ export default function PreviewPage({ params }: PreviewPageProps) {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Top Bar Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Top Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200">
         <div className="flex items-center gap-3">
           <Link href="/history">
             <Button variant="ghost" size="sm" className="h-9 px-2.5 text-slate-600 rounded-xl">
@@ -210,11 +342,11 @@ export default function PreviewPage({ params }: PreviewPageProps) {
           <div className="h-4 w-px bg-slate-200" />
           <Badge className="bg-[#0E1B4D] text-xs font-bold">Planning Book SJB-RGA006</Badge>
           <Badge variant="outline" className="text-xs font-bold text-[#D71921] border-[#D71921]/30">
-            3 Entregables Listos
+            Documento Completo (18+ Páginas)
           </Badge>
         </div>
 
-        {/* Action Buttons */}
+        {/* Global Export & Save Actions */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* COMPLETE ZIP BUNDLE BUTTON */}
           <Button
@@ -245,7 +377,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
             size="sm"
             onClick={handleSave}
             disabled={isSaving}
-            className="bg-[#162874] hover:bg-[#0E1B4D] text-white text-xs font-bold shadow-sm rounded-xl h-9"
+            className="bg-[#0E1B4D] hover:bg-[#162874] text-white text-xs font-bold shadow-sm rounded-xl h-9"
           >
             {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
             Guardar
@@ -258,7 +390,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
         <TabsList className="bg-slate-200/70 p-1.5 rounded-2xl grid grid-cols-3 max-w-2xl">
           <TabsTrigger value="planning" className="rounded-xl text-xs font-bold py-2 data-[state=active]:bg-[#0E1B4D] data-[state=active]:text-white">
             <BookOpen className="h-3.5 w-3.5 mr-1.5" />
-            1. Planning Book
+            1. Planning Book Oficial
           </TabsTrigger>
           <TabsTrigger value="rubrics" className="rounded-xl text-xs font-bold py-2 data-[state=active]:bg-[#0E1B4D] data-[state=active]:text-white">
             <TableProperties className="h-3.5 w-3.5 mr-1.5" />
@@ -270,109 +402,176 @@ export default function PreviewPage({ params }: PreviewPageProps) {
           </TabsTrigger>
         </TabsList>
 
-        {/* TAB 1: PLANNING BOOK */}
+        {/* TAB 1: PLANNING BOOK (WORD-LIKE PAGINATED VIEW & EDITOR) */}
         <TabsContent value="planning" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-4">
-              <Card className="border-slate-200 shadow-md rounded-2xl bg-white overflow-hidden">
-                <div className="p-5 bg-[#0E1B4D] text-white flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="relative w-9 h-9 shrink-0 drop-shadow">
-                      <Image src="/logo.png" alt="Escudo CBSJC" fill className="object-contain" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-serif text-slate-300 block">Colegio bilingüe</span>
-                      <h2 className="text-xs font-black uppercase tracking-wider text-white">
-                        <span className="text-[#D71921]">San José</span> Campestre
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="text-right text-[11px] text-slate-300">
-                    <p className="font-bold text-white">SJB-RGA006</p>
-                    <p>{formatArea(document.area)}</p>
-                  </div>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Left 3 Columns: Word-like Document Canvas */}
+            <div className="lg:col-span-3 space-y-4">
+              {/* Document Toolbar */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={viewMode === 'visual' ? 'default' : 'outline'}
+                    onClick={() => setViewMode('visual')}
+                    className="h-8 text-xs font-bold rounded-xl"
+                  >
+                    <Eye className="h-3.5 w-3.5 mr-1.5" />
+                    Vista Formato Word
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={viewMode === 'markdown' ? 'default' : 'outline'}
+                    onClick={() => setViewMode('markdown')}
+                    className="h-8 text-xs font-bold rounded-xl"
+                  >
+                    <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+                    Editor de Texto
+                  </Button>
                 </div>
 
-                <CardContent className="p-6 space-y-4">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-slate-400">Título de la Secuencia Didáctica</Label>
-                    <h1 className="text-lg font-black text-slate-900">{document.title}</h1>
-                  </div>
+                <div className="text-xs text-slate-500 flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                  <span>Plantilla SJB-RGA006 (Formato 100% Oficial)</span>
+                  {lastSaved && (
+                    <span className="text-emerald-700 font-bold ml-2">
+                      • Guardado: {lastSaved.toLocaleTimeString()}
+                    </span>
+                  )}
+                </div>
+              </div>
 
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>Contenido del Planning Book (Editable)</span>
-                      {lastSaved && (
-                        <span className="text-emerald-600 font-bold">
-                          Guardado a las {lastSaved.toLocaleTimeString()}
-                        </span>
-                      )}
+              {/* SIMULATED WORD PAGE CONTAINER */}
+              {viewMode === 'visual' ? (
+                <div className="bg-slate-100/80 p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-inner flex justify-center">
+                  <div className="w-full max-w-4xl bg-white shadow-2xl rounded-xl border border-slate-200 p-8 sm:p-14 space-y-6 min-h-[1100px] text-slate-900 font-sans">
+                    {/* Official 3-Column Header Table */}
+                    <div className="border border-slate-400 rounded-lg overflow-hidden grid grid-cols-12 text-xs">
+                      {/* Logo Column */}
+                      <div className="col-span-2 p-3 bg-white border-r border-slate-400 flex flex-col items-center justify-center">
+                        <div className="relative w-14 h-14">
+                          <Image src="/cbsjc-crest.png" alt="Escudo CBSJC" fill className="object-contain" priority />
+                        </div>
+                      </div>
+
+                      {/* Center Title Column */}
+                      <div className="col-span-7 p-3 border-r border-slate-400 text-center flex flex-col justify-center bg-white">
+                        <h2 className="font-bold text-[#0E1B4D] text-xs uppercase tracking-wide">
+                          Colegio Bilingüe San José Campestre
+                        </h2>
+                        <h3 className="font-black text-[#D71921] text-xs uppercase tracking-wide mt-0.5">
+                          Planning Book Primary & Secondary
+                        </h3>
+                        <p className="text-[10px] text-slate-500 font-medium">
+                          Secuencia Didáctica: Antes — Durante — Después · Formato RGA006
+                        </p>
+                      </div>
+
+                      {/* Right Metadata Column */}
+                      <div className="col-span-3 p-3 bg-slate-50 flex flex-col justify-center text-[10px] text-right space-y-0.5">
+                        <p className="font-bold text-[#0E1B4D]">CÓDIGO: SJB-RGA006</p>
+                        <p className="text-slate-500">VERSIÓN: 4</p>
+                        <p className="text-slate-500">VIGENCIA: 2026</p>
+                        <p className="font-semibold text-slate-700">PÁGINA: 1 de 18+</p>
+                      </div>
                     </div>
-                    <Textarea
-                      value={planningMarkdown}
-                      onChange={(e) => setPlanningMarkdown(e.target.value)}
-                      rows={26}
-                      className="font-mono text-xs leading-relaxed p-4 bg-white border-slate-300 focus:border-[#162874] rounded-xl"
-                    />
+
+                    {/* Visual Rendered Document Body */}
+                    <div className="prose prose-slate max-w-none text-xs leading-relaxed space-y-4">
+                      {renderVisualDocument(planningMarkdown)}
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              ) : (
+                <Card className="border-slate-200 shadow-md rounded-2xl bg-white overflow-hidden p-6 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-[#0E1B4D]">Editor de Texto de la Planeación Curricular</Label>
+                    <span className="text-xs text-slate-400">Total caracteres: {planningMarkdown.length}</span>
+                  </div>
+                  <Textarea
+                    value={planningMarkdown}
+                    onChange={(e) => setPlanningMarkdown(e.target.value)}
+                    rows={30}
+                    className="font-mono text-xs leading-relaxed p-4 bg-white border-slate-300 focus:border-[#162874] rounded-xl"
+                  />
+                </Card>
+              )}
             </div>
 
-            {/* Side Action Column */}
+            {/* Right Side Column: Actions & Download Cards */}
             <div className="space-y-5">
+              {/* Primary Word & PDF Download Card */}
               <Card className="border-slate-200 shadow-md bg-white rounded-2xl">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-bold text-[#0E1B4D] flex items-center gap-2">
                     <FileDown className="h-4 w-4 text-[#D71921]" />
-                    Descargar Planning Book
+                    Descargar Planning Book Oficial
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Descarga la secuencia didáctica con el formato visual oficial del colegio.
+                    Archivos generados con las 18 tablas institucionales oficiales.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <Button
                     onClick={() => handleExport('docx')}
                     disabled={exportingFormat !== null}
-                    className="w-full h-11 bg-[#162874] hover:bg-[#0E1B4D] text-white font-bold text-xs flex items-center justify-between px-4 shadow-sm rounded-xl"
+                    className="w-full h-12 bg-[#0E1B4D] hover:bg-[#162874] text-white font-bold text-xs flex items-center justify-between px-4 shadow-sm rounded-xl"
                   >
                     <div className="flex items-center gap-2">
-                      <FileDown className="h-4 w-4" />
+                      {exportingFormat === 'docx' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
                       <span>Descargar Word (.docx)</span>
                     </div>
-                    <span className="text-[10px] bg-[#0E1B4D] px-2 py-0.5 rounded font-mono">Word</span>
+                    <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-mono">Word Oficial</span>
                   </Button>
 
                   <Button
                     onClick={() => handleExport('pdf')}
                     disabled={exportingFormat !== null}
-                    className="w-full h-11 bg-[#D71921] hover:bg-[#B81219] text-white font-bold text-xs flex items-center justify-between px-4 shadow-sm rounded-xl"
+                    className="w-full h-12 bg-[#D71921] hover:bg-[#B81219] text-white font-bold text-xs flex items-center justify-between px-4 shadow-sm rounded-xl"
                   >
                     <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
+                      {exportingFormat === 'pdf' ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                       <span>Descargar PDF (.pdf)</span>
                     </div>
-                    <span className="text-[10px] bg-red-900/60 px-2 py-0.5 rounded font-mono">PDF</span>
+                    <span className="text-[10px] bg-red-950/40 px-2 py-0.5 rounded font-mono">PDF Imprimible</span>
                   </Button>
                 </CardContent>
               </Card>
 
-              {/* Technical Details Card */}
-              <Card className="border-slate-200 shadow-sm bg-slate-50/50 rounded-2xl">
+              {/* Full Package ZIP Card */}
+              <Card className="border-slate-200 shadow-md bg-slate-50 rounded-2xl">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    Estructura Institucional SJB-RGA006
+                  <CardTitle className="text-xs font-bold text-[#0E1B4D] flex items-center gap-1.5">
+                    <FolderArchive className="h-4 w-4 text-[#D71921]" />
+                    Paquete Curricular Completo
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-xs text-slate-600">
-                  <p className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> 1. Identificación y Referentes (DBA/EBC)</p>
-                  <p className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> 2. Arco Antes, Durante y Después</p>
-                  <p className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> 3. Plan de Evaluación Continua</p>
-                  <p className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> 4. Pilares (35/35/20/10)</p>
-                  <p className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> 5. Rúbrica Menú de Desafíos</p>
-                  <p className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> 6. Bloque Cibercolegios</p>
-                  <p className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> 7. Bitácora de Secuencia</p>
+                  <p className="text-[11px] text-slate-500">
+                    Descarga en un solo archivo comprimido (.zip):
+                  </p>
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-1.5 text-[11px]">
+                    <p className="flex items-center gap-1.5 font-medium text-slate-800">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      1. Planning Book Word (.docx)
+                    </p>
+                    <p className="flex items-center gap-1.5 font-medium text-slate-800">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      2. Rúbricas Menú de Desafíos (.docx)
+                    </p>
+                    <p className="flex items-center gap-1.5 font-medium text-slate-800">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      3. Planilla de Notas Excel (.xlsx)
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => handleExport('zip')}
+                    disabled={exportingFormat !== null}
+                    className="w-full bg-[#0E1B4D] hover:bg-[#162874] text-white text-xs font-bold rounded-xl mt-2"
+                  >
+                    {exportingFormat === 'zip' ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <FolderArchive className="h-3.5 w-3.5 mr-1" />}
+                    Descargar Paquete ZIP
+                  </Button>
                 </CardContent>
               </Card>
             </div>
@@ -414,31 +613,35 @@ export default function PreviewPage({ params }: PreviewPageProps) {
                 </CardContent>
               </Card>
 
-              {/* Rubrics Textarea */}
-              <Card className="border-slate-200 shadow-md rounded-2xl bg-white">
-                <CardHeader>
-                  <CardTitle className="text-sm font-bold text-[#0E1B4D]">
-                    Rúbricas Detalladas de la Secuencia Didáctica
+              {/* Visual Rubrics Matrix & Anexos */}
+              <Card className="border-slate-200 shadow-md rounded-2xl bg-white p-6 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <CardTitle className="text-base font-bold text-[#0E1B4D]">
+                    Rúbricas Detalladas y Anexos Evaluativos
                   </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Textarea
-                    value={rubricsMarkdown}
-                    onChange={(e) => setRubricsMarkdown(e.target.value)}
-                    rows={20}
-                    className="font-mono text-xs leading-relaxed p-4 bg-white border-slate-300 focus:border-[#162874] rounded-xl"
-                  />
-                </CardContent>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleSave}
+                    className="rounded-xl text-xs font-bold"
+                  >
+                    <Save className="h-3.5 w-3.5 mr-1" /> Guardar Rúbricas
+                  </Button>
+                </div>
+
+                <div className="prose prose-slate max-w-none text-xs leading-relaxed">
+                  {renderVisualDocument(rubricsMarkdown)}
+                </div>
               </Card>
             </div>
 
-            {/* Side Action Column */}
+            {/* Side Action Column for Rubrics */}
             <div className="space-y-5">
               <Card className="border-slate-200 shadow-md bg-white rounded-2xl">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-bold text-[#0E1B4D] flex items-center gap-2">
                     <FileDown className="h-4 w-4 text-[#D71921]" />
-                    Descargar Rúbricas
+                    Descargar Rúbricas (.docx)
                   </CardTitle>
                   <CardDescription className="text-xs">
                     Exporta la matriz de evaluación y criterios en formato Word editable.
@@ -448,13 +651,13 @@ export default function PreviewPage({ params }: PreviewPageProps) {
                   <Button
                     onClick={() => handleExport('rubrics_docx')}
                     disabled={exportingFormat !== null}
-                    className="w-full h-11 bg-[#162874] hover:bg-[#0E1B4D] text-white font-bold text-xs flex items-center justify-between px-4 shadow-sm rounded-xl"
+                    className="w-full h-11 bg-[#0E1B4D] hover:bg-[#162874] text-white font-bold text-xs flex items-center justify-between px-4 shadow-sm rounded-xl"
                   >
                     <div className="flex items-center gap-2">
                       <FileDown className="h-4 w-4" />
                       <span>Descargar Rúbrica (.docx)</span>
                     </div>
-                    <span className="text-[10px] bg-[#0E1B4D] px-2 py-0.5 rounded font-mono">Word</span>
+                    <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-mono">Word</span>
                   </Button>
                 </CardContent>
               </Card>
@@ -520,16 +723,16 @@ export default function PreviewPage({ params }: PreviewPageProps) {
                   Fórmulas y Bandas del Menú de Desafíos Integradas en el Excel
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                  <div className="p-3 bg-white rounded-xl border border-amber-300 font-medium">
-                    <span className="font-bold text-amber-900 block">Gold (4.8 – 5.0)</span>
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 font-medium">
+                    <span className="font-bold text-[#0E1B4D] block">Gold (4.8 – 5.0)</span>
                     <span className="text-[11px] text-slate-500">Desempeño superior avanzado</span>
                   </div>
-                  <div className="p-3 bg-white rounded-xl border border-slate-300 font-medium">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 font-medium">
                     <span className="font-bold text-slate-800 block">Silver (4.6 – 4.7)</span>
                     <span className="text-[11px] text-slate-500">Alto con elementos agregados</span>
                   </div>
-                  <div className="p-3 bg-white rounded-xl border border-amber-600 font-medium">
-                    <span className="font-bold text-amber-800 block">Bronze (4.0 – 4.5)</span>
+                  <div className="p-3 bg-white rounded-xl border border-slate-200 font-medium">
+                    <span className="font-bold text-slate-800 block">Bronze (4.0 – 4.5)</span>
                     <span className="text-[11px] text-slate-500">Aprendizaje esperado completo</span>
                   </div>
                   <div className="p-3 bg-white rounded-xl border border-red-300 font-medium">
