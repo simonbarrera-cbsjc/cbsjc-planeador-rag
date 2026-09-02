@@ -266,22 +266,16 @@ export function WordPageSheet({
                       contentEditable={isEditable}
                       suppressContentEditableWarning
                       onBlur={(e) =>
-                        onUpdateBlock(block.id, { content: e.currentTarget.textContent || '' })
+                        onUpdateBlock(block.id, { content: (e.currentTarget.innerHTML || '').replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**').replace(/<[^>]+>/g, '') })
                       }
                       className="text-xs text-slate-800 leading-relaxed outline-none focus:bg-blue-50/30 px-1 py-0.5 rounded"
-                      dangerouslySetInnerHTML={
-                        !isEditable
-                          ? {
-                              __html: block.content.replace(
-                                /\*\*(.*?)\*\*/g,
-                                '<strong class="text-[#0E1B4D] font-bold">$1</strong>'
-                              ),
-                            }
-                          : undefined
-                      }
-                    >
-                      {isEditable ? block.content : undefined}
-                    </p>
+                      dangerouslySetInnerHTML={{
+                        __html: block.content.replace(
+                          /\*\*(.*?)\*\*/g,
+                          '<strong class="text-[#0E1B4D] font-bold">$1</strong>'
+                        ),
+                      }}
+                    />
                   )}
 
                   {block.type === 'bullet' && (
@@ -291,22 +285,16 @@ export function WordPageSheet({
                         contentEditable={isEditable}
                         suppressContentEditableWarning
                         onBlur={(e) =>
-                          onUpdateBlock(block.id, { content: e.currentTarget.textContent || '' })
+                          onUpdateBlock(block.id, { content: (e.currentTarget.innerHTML || '').replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**').replace(/<[^>]+>/g, '') })
                         }
                         className="flex-1 leading-relaxed outline-none focus:bg-blue-50/30 px-1 rounded"
-                        dangerouslySetInnerHTML={
-                          !isEditable
-                            ? {
-                                __html: block.content.replace(
-                                  /\*\*(.*?)\*\*/g,
-                                  '<strong class="text-[#0E1B4D] font-bold">$1</strong>'
-                                ),
-                              }
-                            : undefined
-                        }
-                      >
-                        {isEditable ? block.content : undefined}
-                      </div>
+                        dangerouslySetInnerHTML={{
+                          __html: block.content.replace(
+                            /\*\*(.*?)\*\*/g,
+                            '<strong class="text-[#0E1B4D] font-bold">$1</strong>'
+                          ),
+                        }}
+                      />
                     </div>
                   )}
 

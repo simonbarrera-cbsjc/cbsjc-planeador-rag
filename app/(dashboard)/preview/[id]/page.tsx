@@ -79,8 +79,8 @@ export default function PreviewPage({ params }: PreviewPageProps) {
   // Structured blocks for WYSIWYG editing
   const [blocks, setBlocks] = useState<DocumentBlock[]>([])
 
-  // View mode: 'pages' (Word A4 paginated), 'continuous' (web layout), 'markdown' (raw text)
-  const [viewMode, setViewMode] = useState<'pages' | 'continuous' | 'markdown'>('pages')
+  // View mode: 'pages' (Word A4 paginated) or 'markdown' (raw text editor)
+  const [viewMode, setViewMode] = useState<'pages' | 'markdown'>('pages')
   const [isEditable, setIsEditable] = useState(true)
   const [zoomScale, setZoomScale] = useState(1)
 
@@ -489,61 +489,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
                 </div>
               )}
 
-              {/* VIEW MODE 2: CONTINUOUS WEB-LAYOUT VIEW */}
-              {viewMode === 'continuous' && (
-                <div className="bg-slate-100 p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-inner flex justify-center">
-                  <div className="w-full max-w-4xl bg-white shadow-xl rounded-xl border border-slate-300 p-8 sm:p-14 space-y-6 min-h-[1100px]">
-                    {/* Single Master Sheet Continuous Container */}
-                    <div className="border-2 border-slate-700 rounded-sm overflow-hidden grid grid-cols-12 text-xs mb-6 bg-white">
-                      <div className="col-span-2 p-3 bg-white border-r-2 border-slate-700 flex flex-col items-center justify-center">
-                        <div className="relative w-16 h-16">
-                          <Image
-                            src="/cbsjc-crest.png"
-                            alt="Escudo Oficial CBSJC"
-                            fill
-                            className="object-contain"
-                            priority
-                          />
-                        </div>
-                      </div>
-                      <div className="col-span-7 p-3 border-r-2 border-slate-700 text-center flex flex-col justify-center bg-white space-y-0.5">
-                        <h2 className="font-extrabold text-[#0E1B4D] text-xs uppercase tracking-wide">
-                          Colegio Bilingüe San José Campestre
-                        </h2>
-                        <h3 className="font-black text-[#D71921] text-xs uppercase tracking-wide">
-                          Planning Book Primary & Secondary
-                        </h3>
-                        <p className="text-[10px] text-slate-600 font-medium">
-                          Secuencia Didáctica: Antes — Durante — Después · Formato SJB-RGA006
-                        </p>
-                      </div>
-                      <div className="col-span-3 p-3 bg-slate-50 flex flex-col justify-center text-[10px] text-right space-y-0.5">
-                        <p className="font-bold text-[#0E1B4D]">CÓDIGO: SJB-RGA006</p>
-                        <p className="text-slate-600">VERSIÓN: 4</p>
-                        <p className="text-slate-600">VIGENCIA: 2026</p>
-                        <p className="font-bold text-slate-800">DOCUMENTO COMPLETO</p>
-                      </div>
-                    </div>
-
-                    {/* Render All Blocks Continuously */}
-                    {pages.map((p, idx) => (
-                      <WordPageSheet
-                        key={`cont-page-${idx}`}
-                        page={p}
-                        pageIndex={idx}
-                        totalPages={pages.length}
-                        isEditable={isEditable}
-                        zoomScale={1}
-                        onUpdateBlock={handleUpdateBlock}
-                        onAddBlock={handleAddBlock}
-                        onDeleteBlock={handleDeleteBlock}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* VIEW MODE 3: FULL MARKDOWN CODE EDITOR */}
+              {/* VIEW MODE 2: FULL MARKDOWN CODE EDITOR */}
               {viewMode === 'markdown' && (
                 <Card className="border-slate-200 shadow-md rounded-2xl bg-white overflow-hidden p-6 space-y-3">
                   <div className="flex items-center justify-between">

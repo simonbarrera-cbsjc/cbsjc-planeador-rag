@@ -28,8 +28,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
 export interface WordToolbarProps {
-  viewMode: 'pages' | 'continuous' | 'markdown'
-  setViewMode: (mode: 'pages' | 'continuous' | 'markdown') => void
+  viewMode: 'pages' | 'markdown'
+  setViewMode: (mode: 'pages' | 'markdown') => void
   isEditable: boolean
   setIsEditable: (editable: boolean) => void
   zoomScale: number
@@ -76,20 +76,6 @@ export function WordToolbar({
           >
             <BookOpen className="h-3.5 w-3.5 mr-1.5" />
             Hojas A4 (Word)
-          </Button>
-
-          <Button
-            size="sm"
-            variant={viewMode === 'continuous' ? 'default' : 'ghost'}
-            onClick={() => setViewMode('continuous')}
-            className={`h-8 px-3 text-xs font-bold rounded-lg ${
-              viewMode === 'continuous'
-                ? 'bg-[#0E1B4D] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-            }`}
-          >
-            <Layers className="h-3.5 w-3.5 mr-1.5" />
-            Flujo Continuo
           </Button>
 
           <Button

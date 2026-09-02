@@ -9,46 +9,43 @@ import {
   Font,
   renderToBuffer,
 } from '@react-pdf/renderer'
+import path from 'path'
+import fs from 'fs'
 
 if (typeof window !== 'undefined') {
   throw new Error('lib/export/pdf.tsx must only be used on the server.')
 }
 
-// Disable hyphenation to prevent word break glitches and font lookup issues
+// Disable hyphenation to prevent word break glitches in serverless
 Font.registerHyphenationCallback((word) => [word])
 
-// Register standard TrueType fonts from CDN so pdfkit does not seek local .afm files in Lambda
+// Register fonts using local files bundled with the deployment.
+// In Vercel serverless, process.cwd() => /var/task, and public/ is at /var/task/public/
+// We use path.join to construct paths that work in both local dev and Vercel.
+const fontDir = path.join(process.cwd(), 'public', 'fonts')
+const regularFontPath = path.join(fontDir, 'Roboto-Regular.ttf')
+const boldFontPath = path.join(fontDir, 'Roboto-Bold.ttf')
+
+// Check if local fonts exist. If yes, register from file. Otherwise, use CDN as fallback.
+const regularSrc = fs.existsSync(regularFontPath)
+  ? regularFontPath
+  : 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-regular-webfont.ttf'
+const boldSrc = fs.existsSync(boldFontPath)
+  ? boldFontPath
+  : 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bold-webfont.ttf'
+
 Font.register({
   family: 'Roboto',
   fonts: [
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-light-webfont.ttf',
-      fontWeight: 300,
-    },
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-regular-webfont.ttf',
-      fontWeight: 400,
-    },
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-medium-webfont.ttf',
-      fontWeight: 500,
-    },
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bold-webfont.ttf',
-      fontWeight: 700,
-    },
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-italic-webfont.ttf',
-      fontWeight: 400,
-      fontStyle: 'italic',
-    },
-    {
-      src: 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bolditalic-webfont.ttf',
-      fontWeight: 700,
-      fontStyle: 'italic',
-    },
+    { src: regularSrc, fontWeight: 'normal' },
+    { src: boldSrc, fontWeight: 'bold' },
   ],
 })
+
+const NAVY = '#0E1B4D'
+const RED = '#D71921'
+const GRAY_BG = '#F1F5F9'
+const BORDER = '#CBD5E1'
 
 const styles = StyleSheet.create({
   page: {
@@ -65,66 +62,66 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#94A3B8',
     marginBottom: 12,
-    flexDirection: 'row',
+    flexDirection: 'row' as const,
   },
   headerColLeft: {
-    width: '20%',
+    width: '18%',
     padding: 8,
     borderRightWidth: 1,
     borderRightColor: '#94A3B8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#0E1B4D',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    backgroundColor: NAVY,
   },
   headerLogoText: {
     fontFamily: 'Roboto',
     color: '#FFFFFF',
-    fontWeight: 700,
+    fontWeight: 'bold' as const,
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
   headerColCenter: {
     width: '55%',
     padding: 6,
     borderRightWidth: 1,
     borderRightColor: '#94A3B8',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
   },
   schoolName: {
     fontFamily: 'Roboto',
     fontSize: 10,
-    fontWeight: 700,
-    color: '#0E1B4D',
-    textAlign: 'center',
+    fontWeight: 'bold' as const,
+    color: NAVY,
+    textAlign: 'center' as const,
   },
   planningTitle: {
     fontFamily: 'Roboto',
     fontSize: 9,
-    fontWeight: 700,
-    color: '#D71921',
+    fontWeight: 'bold' as const,
+    color: RED,
     marginTop: 2,
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
   formatText: {
     fontFamily: 'Roboto',
     fontSize: 7.5,
     color: '#64748B',
     marginTop: 1,
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
   headerColRight: {
-    width: '25%',
+    width: '27%',
     padding: 6,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    backgroundColor: '#F8FAFC',
+    justifyContent: 'center' as const,
+    alignItems: 'flex-end' as const,
+    backgroundColor: GRAY_BG,
   },
   codeText: {
     fontFamily: 'Roboto',
     fontSize: 7.5,
-    color: '#0E1B4D',
-    fontWeight: 700,
+    color: NAVY,
+    fontWeight: 'bold' as const,
   },
   subCodeText: {
     fontFamily: 'Roboto',
@@ -132,59 +129,30 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 1,
   },
-  metaTable: {
-    borderWidth: 1,
-    borderColor: '#94A3B8',
-    marginBottom: 12,
-    backgroundColor: '#FFFFFF',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#CBD5E1',
-  },
-  metaKey: {
-    fontFamily: 'Roboto',
-    width: '28%',
-    backgroundColor: '#F1F5F9',
-    padding: 4,
-    borderRightWidth: 1,
-    borderRightColor: '#CBD5E1',
-    fontWeight: 700,
-    fontSize: 8,
-    color: '#0E1B4D',
-  },
-  metaVal: {
-    fontFamily: 'Roboto',
-    width: '72%',
-    padding: 4,
-    fontSize: 8,
-    color: '#1E293B',
-  },
   h1: {
     fontFamily: 'Roboto',
     fontSize: 12,
-    fontWeight: 700,
-    color: '#0E1B4D',
+    fontWeight: 'bold' as const,
+    color: NAVY,
     marginTop: 10,
     marginBottom: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#CBD5E1',
+    borderBottomColor: BORDER,
     paddingBottom: 2,
   },
   h2: {
     fontFamily: 'Roboto',
     fontSize: 10.5,
-    fontWeight: 700,
-    color: '#0E1B4D',
+    fontWeight: 'bold' as const,
+    color: NAVY,
     marginTop: 8,
     marginBottom: 3,
   },
   h3: {
     fontFamily: 'Roboto',
     fontSize: 9,
-    fontWeight: 700,
-    color: '#D71921',
+    fontWeight: 'bold' as const,
+    color: RED,
     marginTop: 6,
     marginBottom: 2,
   },
@@ -192,356 +160,292 @@ const styles = StyleSheet.create({
     fontFamily: 'Roboto',
     fontSize: 8.5,
     marginBottom: 4,
-    textAlign: 'justify',
+    textAlign: 'justify' as const,
     lineHeight: 1.35,
   },
   bulletItem: {
-    flexDirection: 'row',
+    flexDirection: 'row' as const,
     marginBottom: 2,
-    paddingLeft: 6,
+    paddingLeft: 8,
   },
   bulletDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#D71921',
+    fontFamily: 'Roboto',
+    color: RED,
+    fontWeight: 'bold' as const,
+    fontSize: 8,
     marginRight: 4,
-    marginTop: 4,
   },
   bulletText: {
     fontFamily: 'Roboto',
     fontSize: 8.5,
     flex: 1,
+    lineHeight: 1.35,
   },
-  table: {
+  tableContainer: {
     borderWidth: 1,
-    borderColor: '#94A3B8',
-    marginVertical: 6,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#CBD5E1',
+    borderColor: BORDER,
+    marginBottom: 8,
+    marginTop: 4,
   },
   tableHeaderRow: {
-    backgroundColor: '#0E1B4D',
+    flexDirection: 'row' as const,
+    backgroundColor: NAVY,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
   },
   tableHeaderCell: {
     fontFamily: 'Roboto',
+    flex: 1,
     padding: 4,
-    fontSize: 7.5,
-    fontWeight: 700,
     color: '#FFFFFF',
-    borderRightWidth: 1,
-    borderRightColor: '#94A3B8',
+    fontWeight: 'bold' as const,
+    fontSize: 7.5,
+  },
+  tableRow: {
+    flexDirection: 'row' as const,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E2E8F0',
+  },
+  tableRowAlt: {
+    flexDirection: 'row' as const,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
   },
   tableCell: {
     fontFamily: 'Roboto',
-    padding: 4,
-    fontSize: 7.5,
-    color: '#1E293B',
-    borderRightWidth: 1,
-    borderRightColor: '#CBD5E1',
-  },
-  signaturesBox: {
-    marginTop: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#94A3B8',
-  },
-  sigHeaderRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderBottomWidth: 1,
-    borderBottomColor: '#CBD5E1',
-  },
-  sigHeaderCell: {
-    fontFamily: 'Roboto',
     flex: 1,
     padding: 4,
     fontSize: 7.5,
-    fontWeight: 700,
-    color: '#0E1B4D',
-    textAlign: 'center',
-    borderRightWidth: 1,
-    borderRightColor: '#CBD5E1',
-  },
-  sigBodyRow: {
-    flexDirection: 'row',
-    minHeight: 40,
-  },
-  sigBodyCell: {
-    fontFamily: 'Roboto',
-    flex: 1,
-    padding: 4,
-    fontSize: 6.5,
     color: '#334155',
-    textAlign: 'center',
-    borderRightWidth: 1,
-    borderRightColor: '#CBD5E1',
-    justifyContent: 'flex-end',
+  },
+  tableCellKey: {
+    fontFamily: 'Roboto',
+    flex: 1,
+    padding: 4,
+    fontSize: 7.5,
+    color: NAVY,
+    fontWeight: 'bold' as const,
+    backgroundColor: GRAY_BG,
+    borderRightWidth: 0.5,
+    borderRightColor: BORDER,
   },
   footer: {
-    position: 'absolute',
+    position: 'absolute' as const,
     bottom: 20,
     left: 40,
     right: 40,
-    borderTopWidth: 1,
-    borderTopColor: '#CBD5E1',
-    paddingTop: 5,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    fontSize: 7,
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    borderTopWidth: 0.5,
+    borderTopColor: BORDER,
+    paddingTop: 4,
+  },
+  footerText: {
     fontFamily: 'Roboto',
-    color: '#64748B',
+    fontSize: 6.5,
+    color: '#94A3B8',
   },
 })
 
-interface GeneratePdfParams {
-  title: string
-  content: string
-  documentType: string
-  language: 'es' | 'en'
-  metadata: {
-    area?: string
-    nivel?: string
-    grado?: string
-    periodo?: string
-    date: string
-    authorName?: string
-  }
+// ── Rich text rendering (bold + normal spans) ──
+function renderRichText(text: string, baseFontSize = 8.5): React.ReactNode[] {
+  const clean = text.replace(/\*\*\*(.+?)\*\*\*/g, '**$1**') // normalize ***bold*** to **bold**
+  const parts = clean.split(/(\*\*[^*]+\*\*)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return (
+        <Text key={i} style={{ fontWeight: 'bold', color: NAVY, fontFamily: 'Roboto', fontSize: baseFontSize }}>
+          {part.slice(2, -2)}
+        </Text>
+      )
+    }
+    return (
+      <Text key={i} style={{ fontFamily: 'Roboto', fontSize: baseFontSize }}>
+        {part}
+      </Text>
+    )
+  })
 }
 
-interface ParsedPdfBlock {
-  type: 'h1' | 'h2' | 'h3' | 'bullet' | 'paragraph' | 'table'
-  text?: string
-  rows?: string[][]
-}
+// ── Markdown-to-React-PDF component ──
+function MarkdownContent({ markdown }: { markdown: string }) {
+  const lines = markdown.split('\n')
+  const elements: React.ReactNode[] = []
+  let currentTable: string[][] = []
+  let tableKey = 0
 
-function parseMarkdownToPdfBlocks(content: string): ParsedPdfBlock[] {
-  if (!content) return []
-  const lines = content.split('\n')
-  const blocks: ParsedPdfBlock[] = []
-  let tableRows: string[][] = []
-  let inTable = false
-
-  const flushTable = () => {
-    if (tableRows.length > 0) {
-      blocks.push({ type: 'table', rows: tableRows })
-      tableRows = []
-      inTable = false
+  function flushTable() {
+    if (currentTable.length > 0) {
+      const rows = [...currentTable]
+      const headerRow = rows[0]
+      elements.push(
+        <View key={`tbl-${tableKey++}`} style={styles.tableContainer} wrap={false}>
+          <View style={styles.tableHeaderRow}>
+            {headerRow.map((cell, ci) => (
+              <Text key={ci} style={styles.tableHeaderCell}>
+                {cell.replace(/\*\*/g, '')}
+              </Text>
+            ))}
+          </View>
+          {rows.slice(1).map((row, ri) => (
+            <View key={ri} style={ri % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
+              {row.map((cell, ci) => (
+                <Text key={ci} style={ci === 0 ? styles.tableCellKey : styles.tableCell}>
+                  {cell.replace(/\*\*/g, '')}
+                </Text>
+              ))}
+            </View>
+          ))}
+        </View>
+      )
+      currentTable = []
     }
   }
 
-  for (const rawLine of lines) {
-    const line = rawLine.trim()
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+
+    // Table row
     if (line.startsWith('|') && line.endsWith('|')) {
-      if (/^\|[\s\-:|]+\|$/.test(line)) continue
+      if (/^\|[\s\-:|]+\|$/.test(line)) continue // separator row
       const cols = line
         .slice(1, -1)
         .split('|')
-        .map((c) => c.trim().replace(/\*\*/g, ''))
-      tableRows.push(cols)
-      inTable = true
+        .map((c) => c.trim())
+      currentTable.push(cols)
       continue
-    } else if (inTable) {
+    } else {
       flushTable()
     }
 
     if (!line) continue
 
     if (line.startsWith('# ')) {
-      blocks.push({ type: 'h1', text: line.substring(2).replace(/\*\*/g, '') })
+      elements.push(
+        <Text key={i} style={styles.h1}>
+          {line.substring(2).replace(/\*\*/g, '')}
+        </Text>
+      )
     } else if (line.startsWith('## ')) {
-      blocks.push({ type: 'h2', text: line.substring(3).replace(/\*\*/g, '') })
+      elements.push(
+        <Text key={i} style={styles.h2}>
+          {line.substring(3).replace(/\*\*/g, '')}
+        </Text>
+      )
     } else if (line.startsWith('### ')) {
-      blocks.push({ type: 'h3', text: line.substring(4).replace(/\*\*/g, '') })
+      elements.push(
+        <Text key={i} style={styles.h3}>
+          {line.substring(4).replace(/\*\*/g, '')}
+        </Text>
+      )
+    } else if (line.startsWith('#### ')) {
+      elements.push(
+        <Text key={i} style={{ ...styles.h3, color: NAVY, fontSize: 8.5 }}>
+          {line.substring(5).replace(/\*\*/g, '')}
+        </Text>
+      )
     } else if (line.startsWith('- ') || line.startsWith('* ') || /^\d+\.\s/.test(line)) {
-      const cleanText = line.replace(/^[-*]\s+|\d+\.\s+/, '').replace(/\*\*/g, '')
-      blocks.push({ type: 'bullet', text: cleanText })
+      const clean = line.replace(/^[-*]\s+|\d+\.\s+/, '')
+      elements.push(
+        <View key={i} style={styles.bulletItem}>
+          <Text style={styles.bulletDot}>•</Text>
+          <Text style={styles.bulletText}>{renderRichText(clean)}</Text>
+        </View>
+      )
+    } else if (line.startsWith('---')) {
+      elements.push(
+        <View
+          key={i}
+          style={{ borderBottomWidth: 0.5, borderBottomColor: BORDER, marginVertical: 6 }}
+        />
+      )
+    } else if (line.startsWith('```')) {
+      // skip code fences
+    } else if (line.startsWith('*') && !line.startsWith('**')) {
+      elements.push(
+        <Text key={i} style={{ ...styles.paragraph, fontStyle: 'italic', fontSize: 7.5, color: '#64748B' }}>
+          {line.replace(/^\*|\*$/g, '')}
+        </Text>
+      )
     } else {
-      blocks.push({ type: 'paragraph', text: line.replace(/\*\*/g, '') })
+      elements.push(
+        <Text key={i} style={styles.paragraph}>
+          {renderRichText(line)}
+        </Text>
+      )
     }
   }
 
-  if (inTable) {
-    flushTable()
-  }
+  flushTable()
 
-  return blocks
+  return <>{elements}</>
 }
 
-function InstitutionalPdfDocument({ title, content, metadata }: GeneratePdfParams) {
-  const blocks = parseMarkdownToPdfBlocks(content)
+// ── PDF Document interface ──
+export interface PdfOptions {
+  title: string
+  content: string
+  documentType?: string
+  language?: 'es' | 'en'
+  metadata?: {
+    area?: string | null
+    nivel?: string | null
+    grado?: string
+    periodo?: string
+    date?: string
+    authorName?: string
+  }
+}
 
+function PlanningPdfDocument({ title, content, metadata }: PdfOptions) {
   return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        {/* Header Table */}
-        <View style={styles.headerBox}>
+    <Document
+      title={title}
+      author={metadata?.authorName || 'Docente CBSJC'}
+      subject="Planning Book SJB-RGA006"
+      creator="CBSJC Planeador RAG"
+    >
+      <Page size="LETTER" style={styles.page} wrap>
+        {/* Official 3-Column Header */}
+        <View style={styles.headerBox} fixed>
           <View style={styles.headerColLeft}>
             <Text style={styles.headerLogoText}>CBSJC</Text>
-            <Text style={{ fontFamily: 'Roboto', color: '#FFFFFF', fontSize: 6.5 }}>EST. 2000</Text>
           </View>
           <View style={styles.headerColCenter}>
             <Text style={styles.schoolName}>COLEGIO BILINGÜE SAN JOSÉ CAMPESTRE</Text>
             <Text style={styles.planningTitle}>PLANNING BOOK PRIMARY & SECONDARY</Text>
-            <Text style={styles.formatText}>Secuencia Didáctica: Antes — Durante — Después · Formato RGA006</Text>
+            <Text style={styles.formatText}>
+              Secuencia Didáctica: Antes — Durante — Después · Formato RGA006
+            </Text>
           </View>
           <View style={styles.headerColRight}>
             <Text style={styles.codeText}>CÓDIGO: SJB-RGA006</Text>
-            <Text style={styles.subCodeText}>VERSIÓN: 4 · VIGENCIA: 2026</Text>
+            <Text style={styles.subCodeText}>VERSIÓN: 4</Text>
+            <Text style={styles.subCodeText}>VIGENCIA: 2026</Text>
           </View>
         </View>
 
-        {/* Identification Metadata Table */}
-        <View style={styles.metaTable}>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaKey}>Docente(s):</Text>
-            <Text style={styles.metaVal}>{metadata.authorName || 'Docente Titular CBSJC'}</Text>
-          </View>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaKey}>Área / Asignatura:</Text>
-            <Text style={styles.metaVal}>{metadata.area || 'Ciencias Naturales'}</Text>
-          </View>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaKey}>Grado / Periodo:</Text>
-            <Text style={styles.metaVal}>
-              {metadata.grado || 'Grado 6°'} • Periodo {metadata.periodo || 'I'} (2026)
-            </Text>
-          </View>
-          <View style={[styles.metaRow, { borderBottomWidth: 0 }]}>
-            <Text style={styles.metaKey}>Fecha de Emisión:</Text>
-            <Text style={styles.metaVal}>{metadata.date}</Text>
-          </View>
-        </View>
-
-        {/* Content Elements */}
-        {blocks.map((block, idx) => {
-          if (block.type === 'h1') {
-            return (
-              <Text key={idx} style={styles.h1}>
-                {block.text}
-              </Text>
-            )
-          }
-          if (block.type === 'h2') {
-            return (
-              <Text key={idx} style={styles.h2}>
-                {block.text}
-              </Text>
-            )
-          }
-          if (block.type === 'h3') {
-            return (
-              <Text key={idx} style={styles.h3}>
-                {block.text}
-              </Text>
-            )
-          }
-          if (block.type === 'bullet') {
-            return (
-              <View key={idx} style={styles.bulletItem}>
-                <View style={styles.bulletDot} />
-                <Text style={styles.bulletText}>{block.text}</Text>
-              </View>
-            )
-          }
-          if (block.type === 'table' && block.rows) {
-            const colCount = block.rows[0]?.length || 1
-            const cellWidthPercent = `${Math.floor(100 / colCount)}%`
-
-            return (
-              <View key={idx} style={styles.table}>
-                {block.rows.map((row, rIdx) => {
-                  const isHeader = rIdx === 0
-                  return (
-                    <View
-                      key={rIdx}
-                      style={[
-                        styles.tableRow,
-                        isHeader ? styles.tableHeaderRow : { backgroundColor: rIdx % 2 === 1 ? '#FFFFFF' : '#F8FAFC' },
-                      ]}
-                    >
-                      {row.map((col, cIdx) => (
-                        <Text
-                          key={cIdx}
-                          style={[
-                            isHeader ? styles.tableHeaderCell : styles.tableCell,
-                            { width: cellWidthPercent },
-                          ]}
-                        >
-                          {col}
-                        </Text>
-                      ))}
-                    </View>
-                  )
-                })}
-              </View>
-            )
-          }
-          return (
-            <Text key={idx} style={styles.paragraph}>
-              {block.text}
-            </Text>
-          )
-        })}
-
-        {/* Institutional Signatures Table */}
-        <View style={styles.signaturesBox} wrap={false}>
-          <View style={styles.sigHeaderRow}>
-            <Text style={styles.sigHeaderCell}>ELABORÓ</Text>
-            <Text style={styles.sigHeaderCell}>REVISÓ</Text>
-            <Text style={[styles.sigHeaderCell, { borderRightWidth: 0 }]}>APROBÓ</Text>
-          </View>
-          <View style={styles.sigBodyRow}>
-            <View style={styles.sigBodyCell}>
-              <Text style={{ marginTop: 12 }}>_____________________________</Text>
-              <Text style={{ fontWeight: 700, color: '#0E1B4D', marginTop: 2 }}>
-                {metadata.authorName || 'Docente Titular CBSJC'}
-              </Text>
-              <Text>{metadata.grado || 'Grado 6°'} — Docente de Asignatura</Text>
-              <Text>Colegio Bilingüe San José Campestre</Text>
-            </View>
-            <View style={styles.sigBodyCell}>
-              <Text style={{ marginTop: 12 }}>_____________________________</Text>
-              <Text style={{ fontWeight: 700, color: '#0E1B4D', marginTop: 2 }}>
-                Líder de Área / Coordinación
-              </Text>
-              <Text>Comité Curricular y Pedagógico</Text>
-              <Text>Colegio Bilingüe San José Campestre</Text>
-            </View>
-            <View style={[styles.sigBodyCell, { borderRightWidth: 0 }]}>
-              <Text style={{ marginTop: 12 }}>_____________________________</Text>
-              <Text style={{ fontWeight: 700, color: '#0E1B4D', marginTop: 2 }}>
-                Coordinación Académica General
-              </Text>
-              <Text>Rectoría Institucional</Text>
-              <Text>Colegio Bilingüe San José Campestre</Text>
-            </View>
-          </View>
-        </View>
+        {/* Document Body */}
+        <MarkdownContent markdown={content} />
 
         {/* Footer */}
         <View style={styles.footer} fixed>
-          <Text>Colegio Bilingüe San José Campestre • Formato Oficial SJB-RGA006</Text>
-          <Text render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
+          <Text style={styles.footerText}>
+            Colegio Bilingüe San José Campestre · SJB-RGA006 · {metadata?.date || '2026'}
+          </Text>
+          <Text
+            style={styles.footerText}
+            render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+          />
         </View>
       </Page>
     </Document>
   )
 }
 
-export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
-  if (!params.content || params.content.trim().length === 0) {
-    throw new Error('generatePdf: document content must not be empty.')
-  }
-  try {
-    const doc = <InstitutionalPdfDocument {...params} />
-    const buffer = await renderToBuffer(doc)
-    return Buffer.from(buffer)
-  } catch (error) {
-    console.error('Error generating PDF:', error)
-    throw new Error(`PDF generation failed: ${error instanceof Error ? error.message : String(error)}`)
-  }
+export async function generatePdf(options: PdfOptions): Promise<Buffer> {
+  const buffer = await renderToBuffer(<PlanningPdfDocument {...options} />)
+  return Buffer.from(buffer)
 }
