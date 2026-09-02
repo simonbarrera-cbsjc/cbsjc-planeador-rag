@@ -64,6 +64,7 @@ const nextConfig: NextConfig = {
       './node_modules/pdfkit/js/standard-fonts/**/*',
       './node_modules/pdfkit/js/data/**/*',
       './public/fonts/**/*',
+      './public/fonts/*',
     ],
   },
   async headers() {

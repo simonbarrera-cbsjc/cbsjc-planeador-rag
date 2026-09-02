@@ -25,6 +25,8 @@ Font.registerHyphenationCallback((word) => [word])
 const fontDir = path.join(process.cwd(), 'public', 'fonts')
 const regularFontPath = path.join(fontDir, 'Roboto-Regular.ttf')
 const boldFontPath = path.join(fontDir, 'Roboto-Bold.ttf')
+const italicFontPath = path.join(fontDir, 'Roboto-Italic.ttf')
+const boldItalicFontPath = path.join(fontDir, 'Roboto-BoldItalic.ttf')
 
 // Check if local fonts exist. If yes, register from file. Otherwise, use CDN as fallback.
 const regularSrc = fs.existsSync(regularFontPath)
@@ -33,12 +35,20 @@ const regularSrc = fs.existsSync(regularFontPath)
 const boldSrc = fs.existsSync(boldFontPath)
   ? boldFontPath
   : 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bold-webfont.ttf'
+const italicSrc = fs.existsSync(italicFontPath)
+  ? italicFontPath
+  : 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-italic-webfont.ttf'
+const boldItalicSrc = fs.existsSync(boldItalicFontPath)
+  ? boldItalicFontPath
+  : 'https://cdnjs.cloudflare.com/ajax/libs/ink/3.1.10/fonts/Roboto/roboto-bolditalic-webfont.ttf'
 
 Font.register({
   family: 'Roboto',
   fonts: [
-    { src: regularSrc, fontWeight: 'normal' },
-    { src: boldSrc, fontWeight: 'bold' },
+    { src: regularSrc, fontWeight: 'normal', fontStyle: 'normal' },
+    { src: boldSrc, fontWeight: 'bold', fontStyle: 'normal' },
+    { src: italicSrc, fontWeight: 'normal', fontStyle: 'italic' },
+    { src: boldItalicSrc, fontWeight: 'bold', fontStyle: 'italic' },
   ],
 })
 
@@ -71,51 +81,43 @@ const styles = StyleSheet.create({
     borderRightColor: '#94A3B8',
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
-    backgroundColor: NAVY,
-  },
-  headerLogoText: {
-    fontFamily: 'Roboto',
-    color: '#FFFFFF',
-    fontWeight: 'bold' as const,
-    fontSize: 14,
-    textAlign: 'center' as const,
   },
   headerColCenter: {
-    width: '55%',
+    width: '56%',
     padding: 6,
     borderRightWidth: 1,
     borderRightColor: '#94A3B8',
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
+    textAlign: 'center' as const,
   },
-  schoolName: {
+  headerColRight: {
+    width: '26%',
+    padding: 6,
+    justifyContent: 'center' as const,
+    backgroundColor: GRAY_BG,
+  },
+  titleMain: {
     fontFamily: 'Roboto',
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: 'bold' as const,
     color: NAVY,
     textAlign: 'center' as const,
   },
-  planningTitle: {
+  titleSub: {
     fontFamily: 'Roboto',
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: 'bold' as const,
     color: RED,
-    marginTop: 2,
     textAlign: 'center' as const,
-  },
-  formatText: {
-    fontFamily: 'Roboto',
-    fontSize: 7.5,
-    color: '#64748B',
     marginTop: 1,
-    textAlign: 'center' as const,
   },
-  headerColRight: {
-    width: '27%',
-    padding: 6,
-    justifyContent: 'center' as const,
-    alignItems: 'flex-end' as const,
-    backgroundColor: GRAY_BG,
+  titleDesc: {
+    fontFamily: 'Roboto',
+    fontSize: 7,
+    color: '#64748B',
+    textAlign: 'center' as const,
+    marginTop: 1,
   },
   codeText: {
     fontFamily: 'Roboto',
@@ -169,29 +171,26 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
   },
   bulletDot: {
-    fontFamily: 'Roboto',
+    width: 10,
     color: RED,
     fontWeight: 'bold' as const,
-    fontSize: 8,
-    marginRight: 4,
+    fontSize: 9,
   },
   bulletText: {
     fontFamily: 'Roboto',
-    fontSize: 8.5,
     flex: 1,
+    fontSize: 8.5,
     lineHeight: 1.35,
   },
-  tableContainer: {
-    borderWidth: 1,
+  table: {
+    width: '100%',
+    borderWidth: 0.5,
     borderColor: BORDER,
-    marginBottom: 8,
-    marginTop: 4,
+    marginVertical: 4,
   },
   tableHeaderRow: {
     flexDirection: 'row' as const,
     backgroundColor: NAVY,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER,
   },
   tableHeaderCell: {
     fontFamily: 'Roboto',
@@ -249,15 +248,66 @@ const styles = StyleSheet.create({
   },
 })
 
-// ── Rich text rendering (bold + normal spans) ──
+// ── Rich text rendering (bold, italic, bold-italic + normal spans) ──
 function renderRichText(text: string, baseFontSize = 8.5): React.ReactNode[] {
-  const clean = text.replace(/\*\*\*(.+?)\*\*\*/g, '**$1**') // normalize ***bold*** to **bold**
-  const parts = clean.split(/(\*\*[^*]+\*\*)/g)
+  const clean = text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/^#{1,6}\s*/, '')
+
+  const parts = clean.split(/(\*\*\*.*?\*\*\*|___.*?___|\*\*.*?\*\*|__.*?__|\*.*?\*|_.*?_)/g)
+
   return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
+    if (
+      (part.startsWith('***') && part.endsWith('***') && part.length >= 6) ||
+      (part.startsWith('___') && part.endsWith('___') && part.length >= 6)
+    ) {
       return (
-        <Text key={i} style={{ fontWeight: 'bold', color: NAVY, fontFamily: 'Roboto', fontSize: baseFontSize }}>
+        <Text
+          key={i}
+          style={{
+            fontWeight: 'bold',
+            fontStyle: 'italic',
+            color: NAVY,
+            fontFamily: 'Roboto',
+            fontSize: baseFontSize,
+          }}
+        >
+          {part.slice(3, -3)}
+        </Text>
+      )
+    }
+    if (
+      (part.startsWith('**') && part.endsWith('**') && part.length >= 4) ||
+      (part.startsWith('__') && part.endsWith('__') && part.length >= 4)
+    ) {
+      return (
+        <Text
+          key={i}
+          style={{
+            fontWeight: 'bold',
+            color: NAVY,
+            fontFamily: 'Roboto',
+            fontSize: baseFontSize,
+          }}
+        >
           {part.slice(2, -2)}
+        </Text>
+      )
+    }
+    if (
+      (part.startsWith('*') && part.endsWith('*') && part.length >= 2) ||
+      (part.startsWith('_') && part.endsWith('_') && part.length >= 2)
+    ) {
+      return (
+        <Text
+          key={i}
+          style={{
+            fontStyle: 'italic',
+            fontFamily: 'Roboto',
+            fontSize: baseFontSize,
+          }}
+        >
+          {part.slice(1, -1)}
         </Text>
       )
     }
@@ -269,156 +319,162 @@ function renderRichText(text: string, baseFontSize = 8.5): React.ReactNode[] {
   })
 }
 
-// ── Markdown-to-React-PDF component ──
-function MarkdownContent({ markdown }: { markdown: string }) {
-  const lines = markdown.split('\n')
-  const elements: React.ReactNode[] = []
-  let currentTable: string[][] = []
-  let tableKey = 0
-
-  function flushTable() {
-    if (currentTable.length > 0) {
-      const rows = [...currentTable]
-      const headerRow = rows[0]
-      elements.push(
-        <View key={`tbl-${tableKey++}`} style={styles.tableContainer} wrap={false}>
-          <View style={styles.tableHeaderRow}>
-            {headerRow.map((cell, ci) => (
-              <Text key={ci} style={styles.tableHeaderCell}>
-                {cell.replace(/\*\*/g, '')}
-              </Text>
-            ))}
-          </View>
-          {rows.slice(1).map((row, ri) => (
-            <View key={ri} style={ri % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
-              {row.map((cell, ci) => (
-                <Text key={ci} style={ci === 0 ? styles.tableCellKey : styles.tableCell}>
-                  {cell.replace(/\*\*/g, '')}
-                </Text>
-              ))}
-            </View>
-          ))}
-        </View>
-      )
-      currentTable = []
-    }
-  }
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-
-    // Table row
-    if (line.startsWith('|') && line.endsWith('|')) {
-      if (/^\|[\s\-:|]+\|$/.test(line)) continue // separator row
-      const cols = line
-        .slice(1, -1)
-        .split('|')
-        .map((c) => c.trim())
-      currentTable.push(cols)
-      continue
-    } else {
-      flushTable()
-    }
-
-    if (!line) continue
-
-    if (line.startsWith('# ')) {
-      elements.push(
-        <Text key={i} style={styles.h1}>
-          {line.substring(2).replace(/\*\*/g, '')}
-        </Text>
-      )
-    } else if (line.startsWith('## ')) {
-      elements.push(
-        <Text key={i} style={styles.h2}>
-          {line.substring(3).replace(/\*\*/g, '')}
-        </Text>
-      )
-    } else if (line.startsWith('### ')) {
-      elements.push(
-        <Text key={i} style={styles.h3}>
-          {line.substring(4).replace(/\*\*/g, '')}
-        </Text>
-      )
-    } else if (line.startsWith('#### ')) {
-      elements.push(
-        <Text key={i} style={{ ...styles.h3, color: NAVY, fontSize: 8.5 }}>
-          {line.substring(5).replace(/\*\*/g, '')}
-        </Text>
-      )
-    } else if (line.startsWith('- ') || line.startsWith('* ') || /^\d+\.\s/.test(line)) {
-      const clean = line.replace(/^[-*]\s+|\d+\.\s+/, '')
-      elements.push(
-        <View key={i} style={styles.bulletItem}>
-          <Text style={styles.bulletDot}>•</Text>
-          <Text style={styles.bulletText}>{renderRichText(clean)}</Text>
-        </View>
-      )
-    } else if (line.startsWith('---')) {
-      elements.push(
-        <View
-          key={i}
-          style={{ borderBottomWidth: 0.5, borderBottomColor: BORDER, marginVertical: 6 }}
-        />
-      )
-    } else if (line.startsWith('```')) {
-      // skip code fences
-    } else if (line.startsWith('*') && !line.startsWith('**')) {
-      elements.push(
-        <Text key={i} style={{ ...styles.paragraph, fontStyle: 'italic', fontSize: 7.5, color: '#64748B' }}>
-          {line.replace(/^\*|\*$/g, '')}
-        </Text>
-      )
-    } else {
-      elements.push(
-        <Text key={i} style={styles.paragraph}>
-          {renderRichText(line)}
-        </Text>
-      )
-    }
-  }
-
-  flushTable()
-
-  return <>{elements}</>
-}
-
-// ── PDF Document interface ──
-export interface PdfOptions {
+interface GeneratePdfParams {
   title: string
   content: string
   documentType?: string
   language?: 'es' | 'en'
-  metadata?: {
-    area?: string | null
-    nivel?: string | null
+  metadata: {
+    area?: string
+    nivel?: string
     grado?: string
     periodo?: string
-    date?: string
+    date: string
     authorName?: string
   }
 }
 
-function PlanningPdfDocument({ title, content, metadata }: PdfOptions) {
-  return (
-    <Document
-      title={title}
-      author={metadata?.authorName || 'Docente CBSJC'}
-      subject="Planning Book SJB-RGA006"
-      creator="CBSJC Planeador RAG"
-    >
-      <Page size="LETTER" style={styles.page} wrap>
-        {/* Official 3-Column Header */}
+export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
+  const { title, content, metadata } = params
+  const safeDocente = metadata.authorName || 'Docente Titular CBSJC'
+
+  // Parse lines for PDF elements
+  const lines = content.split('\n')
+  const elements: React.ReactNode[] = []
+  let tableRows: string[][] = []
+
+  const flushTable = (key: number) => {
+    if (tableRows.length === 0) return null
+    const headers = tableRows[0] || []
+    const dataRows = tableRows.slice(1)
+    const isTwoCol = headers.length === 2
+
+    const rendered = (
+      <View key={`tbl-${key}`} style={styles.table} wrap={false}>
+        <View style={styles.tableHeaderRow}>
+          {headers.map((h, ci) => (
+            <Text
+              key={ci}
+              style={[
+                styles.tableHeaderCell,
+                isTwoCol && ci === 0 ? { flex: 0.4 } : {},
+              ]}
+            >
+              {h.replace(/\*\*/g, '').trim()}
+            </Text>
+          ))}
+        </View>
+        {dataRows.map((r, ri) => (
+          <View
+            key={ri}
+            style={ri % 2 === 0 ? styles.tableRow : styles.tableRowAlt}
+          >
+            {r.map((c, ci) => (
+              <View
+                key={ci}
+                style={[
+                  isTwoCol && ci === 0 ? styles.tableCellKey : styles.tableCell,
+                  isTwoCol && ci === 0 ? { flex: 0.4 } : {},
+                ]}
+              >
+                <Text>{renderRichText(c.trim(), 7.5)}</Text>
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+    )
+    tableRows = []
+    return rendered
+  }
+
+  let elementKey = 0
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i]
+    const line = rawLine.trim()
+
+    // Table line
+    if (line.startsWith('|') && line.endsWith('|')) {
+      if (/^\|[\s\-:|]+\|$/.test(line)) continue
+      const cells = line
+        .slice(1, -1)
+        .split('|')
+        .map((c) => c.trim())
+      tableRows.push(cells)
+      continue
+    } else if (tableRows.length > 0) {
+      const tbl = flushTable(elementKey++)
+      if (tbl) elements.push(tbl)
+    }
+
+    if (!line) continue
+
+    // Headings
+    if (line.startsWith('# ')) {
+      elements.push(
+        <Text key={elementKey++} style={styles.h1}>
+          {line.substring(2).replace(/\*\*/g, '').trim()}
+        </Text>
+      )
+    } else if (line.startsWith('## ')) {
+      elements.push(
+        <Text key={elementKey++} style={styles.h2}>
+          {line.substring(3).replace(/\*\*/g, '').trim()}
+        </Text>
+      )
+    } else if (line.startsWith('### ')) {
+      elements.push(
+        <Text key={elementKey++} style={styles.h3}>
+          {line.substring(4).replace(/\*\*/g, '').trim()}
+        </Text>
+      )
+    } else if (line.startsWith('#### ') || line.startsWith('##### ') || line.startsWith('###### ')) {
+      elements.push(
+        <Text key={elementKey++} style={[styles.h3, { color: NAVY, fontSize: 8.5 }]}>
+          {line.replace(/^#{4,6}\s*/, '').replace(/\*\*/g, '').trim()}
+        </Text>
+      )
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      elements.push(
+        <View key={elementKey++} style={styles.bulletItem}>
+          <Text style={styles.bulletDot}>•</Text>
+          <Text style={styles.bulletText}>
+            {renderRichText(line.substring(2).trim(), 8.5)}
+          </Text>
+        </View>
+      )
+    } else if (line.startsWith('```')) {
+      continue
+    } else {
+      elements.push(
+        <Text key={elementKey++} style={styles.paragraph}>
+          {renderRichText(line, 8.5)}
+        </Text>
+      )
+    }
+  }
+
+  // Flush remaining table
+  if (tableRows.length > 0) {
+    const tbl = flushTable(elementKey++)
+    if (tbl) elements.push(tbl)
+  }
+
+  const pdfDoc = (
+    <Document title={title} author={safeDocente}>
+      <Page size="A4" style={styles.page}>
+        {/* Header Table */}
         <View style={styles.headerBox} fixed>
           <View style={styles.headerColLeft}>
-            <Text style={styles.headerLogoText}>CBSJC</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: 'bold', color: NAVY }}>
+              CBSJC
+            </Text>
           </View>
           <View style={styles.headerColCenter}>
-            <Text style={styles.schoolName}>COLEGIO BILINGÜE SAN JOSÉ CAMPESTRE</Text>
-            <Text style={styles.planningTitle}>PLANNING BOOK PRIMARY & SECONDARY</Text>
-            <Text style={styles.formatText}>
-              Secuencia Didáctica: Antes — Durante — Después · Formato RGA006
-            </Text>
+            <Text style={styles.titleMain}>COLEGIO BILINGÜE SAN JOSÉ CAMPESTRE</Text>
+            <Text style={styles.titleSub}>PLANNING BOOK PRIMARY & SECONDARY</Text>
+            <Text style={styles.titleDesc}>Secuencia Didáctica: Antes — Durante — Después · Subciclos 3 a 6</Text>
           </View>
           <View style={styles.headerColRight}>
             <Text style={styles.codeText}>CÓDIGO: SJB-RGA006</Text>
@@ -427,25 +483,23 @@ function PlanningPdfDocument({ title, content, metadata }: PdfOptions) {
           </View>
         </View>
 
-        {/* Document Body */}
-        <MarkdownContent markdown={content} />
+        {/* Content Elements */}
+        {elements}
 
-        {/* Footer */}
+        {/* Running Footer */}
         <View style={styles.footer} fixed>
           <Text style={styles.footerText}>
-            Colegio Bilingüe San José Campestre · SJB-RGA006 · {metadata?.date || '2026'}
+            Colegio Bilingüe San José Campestre • Formato SJB-RGA006 • Docente: {safeDocente}
           </Text>
           <Text
             style={styles.footerText}
-            render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
+            render={({ pageNumber, totalPages }) => `Pág. ${pageNumber} de ${totalPages}`}
           />
         </View>
       </Page>
     </Document>
   )
-}
 
-export async function generatePdf(options: PdfOptions): Promise<Buffer> {
-  const buffer = await renderToBuffer(<PlanningPdfDocument {...options} />)
-  return Buffer.from(buffer)
+  const pdfBuffer = await renderToBuffer(pdfDoc)
+  return pdfBuffer
 }
