@@ -128,7 +128,7 @@ export default async function DashboardPage() {
 
         <Card className="border-slate-200 shadow-sm rounded-2xl bg-white p-4 space-y-1">
           <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>Documentos Rectores RAG</span>
+            <span>Documentos Rectores</span>
             <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-600 flex items-center justify-center">
               <Layers className="h-4 w-4" />
             </div>
@@ -175,7 +175,7 @@ export default async function DashboardPage() {
         </Card>
 
         <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white p-5 space-y-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-[#0E1B4D]/10 text-[#0E1B4D] flex items-center justify-center font-bold">
             <TableProperties className="h-5 w-5" />
           </div>
           <div>

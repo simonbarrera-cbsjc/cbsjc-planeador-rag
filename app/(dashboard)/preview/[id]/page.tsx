@@ -384,21 +384,21 @@ export default function PreviewPage({ params }: PreviewPageProps) {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-5">
               {/* Cibercolegios Quick Copy Card */}
-              <Card className="border-amber-200 bg-amber-50/50 shadow-md rounded-2xl">
+              <Card className="border-slate-200 bg-slate-50/80 shadow-md rounded-2xl">
                 <CardHeader className="pb-2 flex flex-row items-center justify-between">
                   <div>
-                    <CardTitle className="text-sm font-bold text-amber-950 flex items-center gap-2">
-                      <Copy className="h-4 w-4 text-amber-700" />
+                    <CardTitle className="text-sm font-bold text-[#0E1B4D] flex items-center gap-2">
+                      <Copy className="h-4 w-4 text-[#D71921]" />
                       Bloque de Traslado Directo a Cibercolegios
                     </CardTitle>
-                    <CardDescription className="text-xs text-amber-800">
+                    <CardDescription className="text-xs text-slate-600">
                       Copia y pega este texto íntegro en la descripción de la tarea/evaluación en la plataforma Cibercolegios.
                     </CardDescription>
                   </div>
                   <Button
                     size="sm"
                     onClick={handleCopyCibercolegios}
-                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm h-8"
+                    className="bg-[#0E1B4D] hover:bg-[#162874] text-white font-bold text-xs rounded-xl shadow-sm h-8"
                   >
                     {copiedSnippet ? <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
                     {copiedSnippet ? '¡Copiado!' : 'Copiar Texto'}
@@ -409,7 +409,7 @@ export default function PreviewPage({ params }: PreviewPageProps) {
                     value={cibercolegiosSnippet}
                     onChange={(e) => setCibercolegiosSnippet(e.target.value)}
                     rows={4}
-                    className="bg-white border-amber-300 font-mono text-xs rounded-xl"
+                    className="bg-white border-slate-300 font-mono text-xs rounded-xl"
                   />
                 </CardContent>
               </Card>

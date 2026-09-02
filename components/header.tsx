@@ -12,10 +12,8 @@ import {
   X,
   LayoutDashboard,
   History,
-  FolderSync,
   ShieldCheck,
   ChevronRight,
-  BookOpen,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -56,7 +54,6 @@ export function Header({
     { label: 'Panel', href: '/dashboard', icon: LayoutDashboard },
     { label: 'Generar Planeación', href: '/generate', icon: Sparkles, highlight: true },
     { label: 'Historial', href: '/history', icon: History },
-    { label: 'Documentos Rectores', href: '/upload', icon: FolderSync },
   ]
 
   return (
@@ -67,8 +64,8 @@ export function Header({
           : 'bg-[#0E1B4D] border-b border-[#0A1435] text-white shadow-md'
       } ${className}`}
     >
-      {/* Top Gold & Red Institutional Accent Ribbon */}
-      <div className="h-1 w-full bg-gradient-to-r from-[#D71921] via-[#C8A84B] to-[#162874]" />
+      {/* Top Red & White Institutional Accent Ribbon */}
+      <div className="h-1 w-full bg-gradient-to-r from-[#D71921] via-white/40 to-[#162874]" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
@@ -76,11 +73,10 @@ export function Header({
           <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
             <Link
               href={user ? '/dashboard' : '/login'}
-              className="group flex items-center gap-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C8A84B] rounded-xl p-1 -m-1"
+              className="group flex items-center gap-3.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-xl p-1 -m-1"
             >
               {/* Institutional Shield */}
               <div className="relative w-10 h-10 sm:w-12 sm:h-12 shrink-0 transition-transform group-hover:scale-105 duration-200">
-                <div className="absolute inset-0 bg-[#C8A84B]/15 rounded-full blur-md group-hover:bg-[#C8A84B]/30 transition-colors" />
                 <Image
                   src="/logo.png"
                   alt="Escudo Oficial Colegio Bilingüe San José Campestre"
@@ -92,14 +88,14 @@ export function Header({
 
               {/* Typography Hierarchy */}
               <div className="min-w-0 flex flex-col justify-center">
-                <span className="text-[10px] sm:text-[11px] font-serif uppercase tracking-widest text-[#C8A84B] font-semibold leading-tight">
+                <span className="text-[10px] sm:text-[11px] font-serif uppercase tracking-widest text-white/90 font-semibold leading-tight">
                   Colegio Bilingüe
                 </span>
                 <h1 className="text-xs sm:text-sm lg:text-base font-black tracking-tight text-white uppercase leading-none truncate mt-0.5">
                   <span className="text-[#D71921]">San José</span> Campestre
                 </h1>
                 <span className="text-[10px] sm:text-xs text-slate-300 font-medium tracking-tight truncate hidden md:inline-block mt-0.5">
-                  Sistema de Planeación Curricular & RAG
+                  Sistema de Planeación Curricular SJB-RGA006
                 </span>
               </div>
             </Link>
@@ -124,7 +120,7 @@ export function Header({
                       href={item.href}
                       className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${
                         isActive
-                          ? 'bg-[#D71921] text-white ring-2 ring-[#C8A84B]'
+                          ? 'bg-[#D71921] text-white ring-2 ring-white/80'
                           : 'bg-[#D71921] text-white hover:bg-[#B81219]'
                       }`}
                     >
@@ -140,14 +136,12 @@ export function Header({
                     href={item.href}
                     className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
                       isActive
-                        ? 'bg-white/15 text-white font-bold border-b-2 border-[#C8A84B]'
+                        ? 'bg-white/20 text-white font-bold border-b-2 border-white'
                         : 'text-slate-300 hover:text-white hover:bg-white/10'
                     }`}
                   >
                     <Icon
-                      className={`h-3.5 w-3.5 ${
-                        isActive ? 'text-[#C8A84B]' : 'text-slate-400'
-                      }`}
+                      className={`h-3.5 w-3.5 ${isActive ? 'text-white' : 'text-slate-400'}`}
                     />
                     <span>{item.label}</span>
                   </Link>
@@ -162,7 +156,7 @@ export function Header({
               variant="outline"
               className="bg-white/5 border-white/15 text-slate-200 text-xs px-3 py-1 font-semibold flex items-center gap-1.5 backdrop-blur-md"
             >
-              <GraduationCap className="h-3.5 w-3.5 text-[#C8A84B]" />
+              <GraduationCap className="h-3.5 w-3.5 text-white" />
               <span>Planning Book SJB-RGA006</span>
             </Badge>
 
@@ -174,7 +168,7 @@ export function Header({
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
               </span>
-              <span>Motor RAG Activo</span>
+              <span>Sistema Oficial Activo</span>
             </Badge>
           </div>
 
@@ -189,10 +183,10 @@ export function Header({
                       <img
                         src={displayAvatar}
                         alt={displayName}
-                        className="w-8 h-8 rounded-full border border-[#C8A84B]/60 object-cover"
+                        className="w-8 h-8 rounded-full border border-white/50 object-cover"
                       />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D71921] to-[#0E1B4D] text-white font-black text-xs flex items-center justify-center border border-[#C8A84B]/50 shadow-inner">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#D71921] to-[#0E1B4D] text-white font-black text-xs flex items-center justify-center border border-white/50 shadow-inner">
                         {displayName.charAt(0).toUpperCase()}
                       </div>
                     )}
@@ -206,7 +200,7 @@ export function Header({
                     <p className="text-xs font-bold text-white truncate leading-tight">
                       {displayName}
                     </p>
-                    <p className="text-[10px] text-[#C8A84B] truncate leading-tight font-medium">
+                    <p className="text-[10px] text-white/80 truncate leading-tight font-medium">
                       {user.role === 'admin'
                         ? 'Administrador'
                         : user.role === 'coordinator'
@@ -235,7 +229,7 @@ export function Header({
                 variant="outline"
                 className="bg-white/5 border-white/20 text-slate-200 text-xs px-3.5 py-1.5 font-semibold flex items-center gap-2 backdrop-blur-md"
               >
-                <ShieldCheck className="h-4 w-4 text-[#C8A84B]" />
+                <ShieldCheck className="h-4 w-4 text-white" />
                 <span className="hidden sm:inline">Acceso Institucional Seguro</span>
                 <span className="sm:hidden">Seguro</span>
               </Badge>
@@ -265,12 +259,12 @@ export function Header({
           </div>
         </div>
 
-        {/* Mobile Navigation Dropdown with Institutional Polish */}
+        {/* Mobile Navigation Dropdown */}
         {user && showNavLinks && mobileMenuOpen && (
           <div className="md:hidden py-4 border-t border-white/10 space-y-2 animate-in fade-in slide-in-from-top-2 duration-200 bg-[#0A1435]/95 rounded-b-2xl px-2 pb-5 mt-1 shadow-2xl">
-            <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-[#C8A84B] uppercase tracking-wider font-mono font-bold">
+            <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-white/80 uppercase tracking-wider font-mono font-bold">
               <span>Navegación Curricular CBSJC</span>
-              <span className="text-[10px] text-emerald-400 font-sans">RAG Activo</span>
+              <span className="text-[10px] text-emerald-400 font-sans">Sistema Activo</span>
             </div>
 
             {navLinks.map((item) => {
@@ -291,7 +285,7 @@ export function Header({
                       <Icon className="h-4 w-4 text-white" />
                       <span>{item.label}</span>
                     </div>
-                    <span className="text-[10px] font-extrabold bg-[#C8A84B] text-[#0E1B4D] px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-extrabold bg-white text-[#0E1B4D] px-2 py-0.5 rounded-full">
                       3 en 1
                     </span>
                   </Link>
@@ -305,19 +299,15 @@ export function Header({
                   onClick={() => setMobileMenuOpen(false)}
                   className={`flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-bold transition-colors ${
                     isActive
-                      ? 'bg-white/15 text-white border-l-4 border-[#C8A84B]'
+                      ? 'bg-white/20 text-white border-l-4 border-white'
                       : 'text-slate-200 hover:text-white hover:bg-white/10'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Icon
-                      className={`h-4 w-4 ${
-                        isActive ? 'text-[#C8A84B]' : 'text-slate-400'
-                      }`}
-                    />
+                    <Icon className={`h-4 w-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
                     <span>{item.label}</span>
                   </div>
-                  {isActive && <ChevronRight className="h-4 w-4 text-[#C8A84B]" />}
+                  {isActive && <ChevronRight className="h-4 w-4 text-white" />}
                 </Link>
               )
             })}
@@ -326,7 +316,7 @@ export function Header({
             <div className="pt-2 px-3">
               <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-[11px] text-slate-300 space-y-1">
                 <div className="flex items-center gap-2 text-white font-bold">
-                  <GraduationCap className="h-3.5 w-3.5 text-[#C8A84B]" />
+                  <GraduationCap className="h-3.5 w-3.5 text-white" />
                   <span>Planning Book SJB-RGA006</span>
                 </div>
                 <p className="text-slate-400 text-[10px]">

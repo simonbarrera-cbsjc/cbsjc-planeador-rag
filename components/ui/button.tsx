@@ -10,7 +10,7 @@ const buttonVariants = cva(
       variant: {
         default: 'bg-[#003087] text-white hover:bg-[#002060] shadow-sm',
         institutional: 'bg-[#003087] text-white hover:bg-[#004ab3] shadow-md active:scale-[0.98]',
-        gold: 'bg-[#C8A84B] text-white hover:bg-[#dfc06a] shadow-sm',
+        gold: 'bg-white text-[#0E1B4D] hover:bg-slate-100 shadow-sm border border-slate-200',
         destructive: 'bg-red-600 text-white hover:bg-red-700 shadow-sm',
         outline: 'border border-slate-300 bg-white hover:bg-slate-50 text-slate-700',
         secondary: 'bg-slate-100 text-slate-900 hover:bg-slate-200',

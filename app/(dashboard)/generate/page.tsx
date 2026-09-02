@@ -571,7 +571,7 @@ export default function GeneratePage() {
                 <span>Planning Book (Word & PDF)</span>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-slate-200">
-                <TableProperties className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                <TableProperties className="h-3.5 w-3.5 text-white shrink-0" />
                 <span>Rúbricas & Cibercolegios</span>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-slate-200">

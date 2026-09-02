@@ -7,11 +7,9 @@ import {
   ShieldCheck,
   FileCheck2,
   Cpu,
-  FolderSync,
   BookOpen,
-  ArrowUpRight,
   School,
-  FileSpreadsheet,
+  LayoutDashboard,
 } from 'lucide-react'
 
 export interface FooterProps {
@@ -25,7 +23,7 @@ export function Footer({ className = '', compact = false }: FooterProps) {
   if (compact) {
     return (
       <footer
-        className={`w-full bg-[#0E1B4D] border-t border-[#0A1435] text-slate-300 py-6 px-4 sm:px-6 lg:px-8 ${className}`}
+        className={`w-full bg-[#0E1B4D] border-t border-white/10 text-slate-300 py-6 px-4 sm:px-6 lg:px-8 ${className}`}
       >
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
           {/* Institutional copyright */}
@@ -68,10 +66,10 @@ export function Footer({ className = '', compact = false }: FooterProps) {
 
   return (
     <footer
-      className={`w-full bg-gradient-to-b from-[#0E1B4D] via-[#0A1435] to-[#060D24] text-slate-300 border-t border-[#162874]/80 relative overflow-hidden ${className}`}
+      className={`w-full bg-gradient-to-b from-[#0E1B4D] via-[#0A1435] to-[#060D24] text-slate-300 border-t border-white/10 relative overflow-hidden ${className}`}
     >
-      {/* Top Gold & Red Brand Stripe */}
-      <div className="h-1 w-full bg-gradient-to-r from-[#D71921] via-[#C8A84B] to-[#162874]" />
+      {/* Top Red & White Brand Stripe */}
+      <div className="h-1 w-full bg-gradient-to-r from-[#D71921] via-white/40 to-[#162874]" />
 
       {/* Ambient background glows */}
       <div className="absolute top-0 left-1/4 w-96 h-48 bg-[#D71921]/10 rounded-full blur-3xl pointer-events-none" />
@@ -92,7 +90,7 @@ export function Footer({ className = '', compact = false }: FooterProps) {
                 />
               </div>
               <div>
-                <span className="text-[10px] font-serif uppercase tracking-widest text-[#C8A84B] font-semibold block leading-tight">
+                <span className="text-[10px] font-serif uppercase tracking-widest text-white/90 font-semibold block leading-tight">
                   Colegio Bilingüe
                 </span>
                 <h3 className="text-base font-black text-white uppercase tracking-tight leading-tight mt-0.5">
@@ -110,7 +108,7 @@ export function Footer({ className = '', compact = false }: FooterProps) {
 
             <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-300 pt-1">
               <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-lg border border-white/10">
-                <ShieldCheck className="h-3.5 w-3.5 text-[#C8A84B]" />
+                <ShieldCheck className="h-3.5 w-3.5 text-white" />
                 <span>Lineamientos DBA & SIEE</span>
               </div>
               <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1 rounded-lg border border-white/10">
@@ -122,7 +120,7 @@ export function Footer({ className = '', compact = false }: FooterProps) {
 
           {/* COLUMN 2: Quick Links & Curricular Formats (3 Cols) */}
           <div className="md:col-span-3 lg:col-span-3 space-y-3.5">
-            <h4 className="text-xs font-black uppercase tracking-wider text-[#C8A84B] flex items-center gap-2 font-mono">
+            <h4 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2 font-mono">
               <BookOpen className="h-3.5 w-3.5 text-[#D71921]" />
               Módulos Curriculares
             </h4>
@@ -132,7 +130,7 @@ export function Footer({ className = '', compact = false }: FooterProps) {
                   href="/dashboard"
                   className="text-slate-300 hover:text-white transition-colors flex items-center gap-2 group"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#C8A84B] group-hover:scale-125 transition-transform" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-white group-hover:scale-125 transition-transform" />
                   <span>Panel Principal</span>
                 </Link>
               </li>
@@ -154,21 +152,12 @@ export function Footer({ className = '', compact = false }: FooterProps) {
                   <span>Historial de Secuencias</span>
                 </Link>
               </li>
-              <li>
-                <Link
-                  href="/upload"
-                  className="text-slate-300 hover:text-white transition-colors flex items-center gap-2 group"
-                >
-                  <FolderSync className="h-3 w-3 text-sky-400" />
-                  <span>Base RAG / Documentos Rectores</span>
-                </Link>
-              </li>
             </ul>
           </div>
 
           {/* COLUMN 3: PROMINENT SCIBARU AI TECH SPOTLIGHT (4 Cols) */}
           <div className="md:col-span-3 lg:col-span-4 space-y-3.5">
-            <h4 className="text-xs font-black uppercase tracking-wider text-[#C8A84B] flex items-center gap-2 font-mono">
+            <h4 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2 font-mono">
               <Cpu className="h-3.5 w-3.5 text-[#A6174B]" />
               Tecnología & Desarrollo
             </h4>
@@ -221,9 +210,9 @@ export function Footer({ className = '', compact = false }: FooterProps) {
           </div>
 
           <div className="flex items-center gap-3 text-[11px] text-slate-300 flex-wrap justify-center">
-            <span className="text-[#C8A84B] font-semibold">Planning Book SJB-RGA006</span>
+            <span className="text-white font-semibold">Planning Book SJB-RGA006</span>
             <span>•</span>
-            <span>Gemini 2.0 Flash</span>
+            <span>Google Gemini Flash</span>
             <span>•</span>
             <span className="font-semibold text-slate-200">Bogotá D.C., Colombia</span>
           </div>

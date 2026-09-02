@@ -8,14 +8,9 @@ import {
   LayoutDashboard,
   Sparkles,
   History,
-  FolderSync,
   GraduationCap,
   LogOut,
-  ChevronRight,
-  ShieldCheck,
-  BookOpen,
 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 
 export interface SidebarUserProps {
   id?: string
@@ -54,12 +49,6 @@ export function Sidebar({ user, className = '', onItemClick }: SidebarProps) {
       icon: History,
       badge: null,
     },
-    {
-      label: 'Base RAG / Rectores',
-      href: '/upload',
-      icon: FolderSync,
-      badge: null,
-    },
   ]
 
   const displayName = user?.name || user?.email?.split('@')[0] || 'Docente'
@@ -68,17 +57,17 @@ export function Sidebar({ user, className = '', onItemClick }: SidebarProps) {
 
   return (
     <aside
-      className={`w-full md:w-64 lg:w-72 bg-[#0E1B4D] text-white flex flex-col border-r border-[#0A1435] shrink-0 min-h-full ${className}`}
+      className={`w-full md:w-64 lg:w-72 bg-[#0E1B4D] text-white flex flex-col border-r border-white/10 shrink-0 min-h-full ${className}`}
     >
-      {/* Top Gold & Red Institutional Accent Line */}
-      <div className="h-1 w-full bg-gradient-to-r from-[#D71921] via-[#C8A84B] to-[#162874]" />
+      {/* Top Red & White Institutional Accent Line */}
+      <div className="h-1 w-full bg-gradient-to-r from-[#D71921] via-white/40 to-[#162874]" />
 
       {/* Institutional Branding Header */}
-      <div className="p-5 border-b border-white/10 flex items-center gap-3.5 bg-[#0A1435]/40">
+      <div className="p-5 border-b border-white/10 flex items-center gap-3.5 bg-[#0A1435]/60">
         <Link
           href="/dashboard"
           onClick={onItemClick}
-          className="flex items-center gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C8A84B] rounded-xl"
+          className="flex items-center gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-white rounded-xl"
         >
           <div className="relative w-11 h-11 shrink-0 drop-shadow-md transition-transform group-hover:scale-105 duration-200">
             <Image
@@ -90,14 +79,14 @@ export function Sidebar({ user, className = '', onItemClick }: SidebarProps) {
             />
           </div>
           <div className="min-w-0">
-            <span className="text-[10px] font-serif uppercase tracking-widest text-[#C8A84B] font-semibold block leading-tight">
+            <span className="text-[10px] font-serif uppercase tracking-widest text-white/90 font-semibold block leading-tight">
               Colegio Bilingüe
             </span>
             <h2 className="text-xs font-black uppercase tracking-wider text-white truncate leading-tight mt-0.5">
               <span className="text-[#D71921]">San José</span> Campestre
             </h2>
             <span className="text-[10px] text-slate-300 font-medium block truncate">
-              Planning Book RAG
+              Planning Book SJB-RGA006
             </span>
           </div>
         </Link>
@@ -106,7 +95,7 @@ export function Sidebar({ user, className = '', onItemClick }: SidebarProps) {
       {/* Navigation Links */}
       <div className="flex-1 p-3.5 space-y-1.5 overflow-y-auto">
         <div className="px-3 pt-2 pb-1.5">
-          <p className="text-[10px] font-extrabold uppercase tracking-widest text-[#C8A84B]/90 font-mono">
+          <p className="text-[10px] font-extrabold uppercase tracking-widest text-white/70 font-mono">
             Módulos Curriculares
           </p>
         </div>
@@ -126,7 +115,7 @@ export function Sidebar({ user, className = '', onItemClick }: SidebarProps) {
                   onClick={onItemClick}
                   className={`group relative flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 shadow-md ${
                     isActive
-                      ? 'bg-gradient-to-r from-[#D71921] to-[#B81219] text-white ring-2 ring-[#C8A84B]/80 shadow-red-950/40'
+                      ? 'bg-gradient-to-r from-[#D71921] to-[#B81219] text-white ring-2 ring-white/80 shadow-red-950/40'
                       : 'bg-[#D71921] hover:bg-[#B81219] text-white hover:shadow-lg'
                   }`}
                 >
@@ -135,7 +124,7 @@ export function Sidebar({ user, className = '', onItemClick }: SidebarProps) {
                     <span>{item.label}</span>
                   </div>
                   {item.badge && (
-                    <span className="text-[9px] font-black uppercase tracking-wide bg-[#C8A84B] text-[#0E1B4D] px-2 py-0.5 rounded-full shadow-sm">
+                    <span className="text-[9px] font-black uppercase tracking-wide bg-white text-[#0E1B4D] px-2 py-0.5 rounded-full shadow-sm">
                       {item.badge}
                     </span>
                   )}
@@ -150,23 +139,19 @@ export function Sidebar({ user, className = '', onItemClick }: SidebarProps) {
                 onClick={onItemClick}
                 className={`group relative flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 ${
                   isActive
-                    ? 'bg-white/15 text-white font-bold border-l-4 border-[#C8A84B] shadow-sm pl-2.5'
+                    ? 'bg-white/20 text-white font-bold border-l-4 border-white shadow-sm pl-2.5'
                     : 'text-slate-300 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <Icon
                     className={`h-4 w-4 shrink-0 transition-colors ${
-                      isActive
-                        ? 'text-[#C8A84B]'
-                        : 'text-slate-400 group-hover:text-slate-200'
+                      isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'
                     }`}
                   />
                   <span className="truncate">{item.label}</span>
                 </div>
-                {isActive && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#C8A84B] shrink-0" />
-                )}
+                {isActive && <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
               </Link>
             )
           })}
@@ -175,10 +160,9 @@ export function Sidebar({ user, className = '', onItemClick }: SidebarProps) {
 
       {/* Institutional Info Card */}
       <div className="p-3 mx-3 mb-3 rounded-2xl bg-white/5 border border-white/10 text-xs space-y-2 relative overflow-hidden">
-        <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-[#C8A84B]/10 rounded-full blur-xl pointer-events-none" />
         <div className="flex items-center gap-2 font-bold text-white">
-          <GraduationCap className="h-4 w-4 text-[#C8A84B] shrink-0" />
-          <span className="text-[11px] uppercase tracking-wide text-white">
+          <GraduationCap className="h-4 w-4 text-white shrink-0" />
+          <span className="text-[11px] uppercase tracking-wide text-white font-semibold">
             SJB-RGA006 Oficial
           </span>
         </div>
@@ -187,7 +171,7 @@ export function Sidebar({ user, className = '', onItemClick }: SidebarProps) {
         </p>
         <div className="pt-1 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-400">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span>Motor RAG Institucional Activo</span>
+          <span>Sistema Curricular Oficial Activo</span>
         </div>
       </div>
 
@@ -199,10 +183,10 @@ export function Sidebar({ user, className = '', onItemClick }: SidebarProps) {
               <img
                 src={avatarUrl}
                 alt={displayName}
-                className="w-9 h-9 rounded-full border border-[#C8A84B]/60 object-cover"
+                className="w-9 h-9 rounded-full border border-white/50 object-cover"
               />
             ) : (
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#D71921] to-[#0E1B4D] text-white font-black text-xs flex items-center justify-center border border-[#C8A84B]/50 shadow-inner">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#D71921] to-[#0E1B4D] text-white font-black text-xs flex items-center justify-center border border-white/50 shadow-inner">
                 {displayName.charAt(0).toUpperCase()}
               </div>
             )}
@@ -215,7 +199,7 @@ export function Sidebar({ user, className = '', onItemClick }: SidebarProps) {
             <p className="text-xs font-bold text-white truncate leading-tight">
               {displayName}
             </p>
-            <p className="text-[10px] text-[#C8A84B] truncate leading-tight font-medium">
+            <p className="text-[10px] text-white/80 truncate leading-tight font-medium">
               {user?.role === 'admin'
                 ? 'Administrador'
                 : user?.role === 'coordinator'
