@@ -65,7 +65,7 @@ const standardBorder = {
  * Parses markdown inline formatting (bold, italic, code, line breaks) into TextRun objects.
  */
 function parseInlineRuns(
-  text: string,
+  rawText: string,
   defaults: {
     bold?: boolean
     italics?: boolean
@@ -82,8 +82,26 @@ function parseInlineRuns(
     font = 'Calibri',
   } = defaults
 
+  if (!rawText) return [new TextRun({ text: '', size, font })]
+
+  let text = String(rawText)
+
+  // 1. Normalize HTML tags to markdown or clean plain text
+  text = text.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**')
+  text = text.replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**')
+  text = text.replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*')
+  text = text.replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*')
+  text = text.replace(/<span[^>]*>(.*?)<\/span>/gi, '$1')
+  text = text.replace(/<br\s*\/?>/gi, '\n')
+  text = text.replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n')
+  text = text.replace(/<div[^>]*>(.*?)<\/div>/gi, '$1\n')
+  // Strip any remaining unknown HTML tags
+  text = text.replace(/<[^>]+>/g, '')
+  // Strip leading hashes (e.g. ### Header)
+  text = text.replace(/^#{1,6}\s*/, '')
+
   const runs: TextRun[] = []
-  // Split on bold (**text**) or italic (*text*)
+  // Split on bold (**text**) or italic (*text*) or code (`code`)
   const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`)/g
   const parts = text.split(regex)
 
@@ -91,9 +109,10 @@ function parseInlineRuns(
     if (!part) continue
 
     if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+      const clean = part.slice(2, -2).replace(/\*/g, '')
       runs.push(
         new TextRun({
-          text: part.slice(2, -2),
+          text: clean,
           bold: true,
           italics,
           color: color === COLOR_TEXT_WHITE ? COLOR_TEXT_WHITE : COLOR_DARK_NAVY,
@@ -102,9 +121,10 @@ function parseInlineRuns(
         })
       )
     } else if (part.startsWith('*') && part.endsWith('*') && part.length >= 2) {
+      const clean = part.slice(1, -1).replace(/\*/g, '')
       runs.push(
         new TextRun({
-          text: part.slice(1, -1),
+          text: clean,
           bold,
           italics: true,
           color,
@@ -123,9 +143,10 @@ function parseInlineRuns(
         })
       )
     } else {
+      const clean = part.replace(/\*\*/g, '')
       runs.push(
         new TextRun({
-          text: part,
+          text: clean,
           bold,
           italics,
           color,
@@ -140,7 +161,7 @@ function parseInlineRuns(
     ? runs
     : [
         new TextRun({
-          text,
+          text: text.replace(/[*#]/g, ''),
           bold,
           italics,
           color,

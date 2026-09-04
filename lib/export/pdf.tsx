@@ -123,12 +123,22 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
       drawHeader()
 
       const cleanText = (str: string) => {
+        if (!str) return ''
         return str
           .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<strong[^>]*>(.*?)<\/strong>/gi, '$1')
+          .replace(/<b[^>]*>(.*?)<\/b>/gi, '$1')
+          .replace(/<em[^>]*>(.*?)<\/em>/gi, '$1')
+          .replace(/<i[^>]*>(.*?)<\/i>/gi, '$1')
+          .replace(/<span[^>]*>(.*?)<\/span>/gi, '$1')
+          .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n')
+          .replace(/<div[^>]*>(.*?)<\/div>/gi, '$1\n')
+          .replace(/<[^>]+>/g, '')
           .replace(/\*\*\*(.*?)\*\*\*/g, '$1')
           .replace(/\*\*(.*?)\*\*/g, '$1')
           .replace(/\*(.*?)\*/g, '$1')
           .replace(/_{1,3}(.*?)_{1,3}/g, '$1')
+          .replace(/[*#]/g, '')
           .trim()
       }
 
@@ -143,10 +153,25 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
         const numCols = headers.length || 1
 
         const colWidths: number[] = []
-        for (let c = 0; c < numCols; c++) {
-          if (isTwoCol) {
-            colWidths.push(c === 0 ? CONTENT_WIDTH * 0.28 : CONTENT_WIDTH * 0.72)
+        if (isTwoCol) {
+          colWidths.push(CONTENT_WIDTH * 0.28, CONTENT_WIDTH * 0.72)
+        } else if (numCols === 3) {
+          const isMoments = headers.some((h) => /momento|fase/i.test(h)) || rows.some((r) => /ANTES|DURANTE/i.test(r[0]))
+          if (isMoments) {
+            colWidths.push(CONTENT_WIDTH * 0.16, CONTENT_WIDTH * 0.26, CONTENT_WIDTH * 0.58)
           } else {
+            colWidths.push(CONTENT_WIDTH * 0.20, CONTENT_WIDTH * 0.35, CONTENT_WIDTH * 0.45)
+          }
+        } else if (numCols === 5) {
+          const isRubric = headers.some((h) => /bronze|silver|gold|sin categor/i.test(h))
+          if (isRubric) {
+            colWidths.push(CONTENT_WIDTH * 0.18, CONTENT_WIDTH * 0.20, CONTENT_WIDTH * 0.21, CONTENT_WIDTH * 0.21, CONTENT_WIDTH * 0.20)
+          } else {
+            // Plan de evaluación continua
+            colWidths.push(CONTENT_WIDTH * 0.25, CONTENT_WIDTH * 0.15, CONTENT_WIDTH * 0.18, CONTENT_WIDTH * 0.14, CONTENT_WIDTH * 0.28)
+          }
+        } else {
+          for (let c = 0; c < numCols; c++) {
             colWidths.push(CONTENT_WIDTH / numCols)
           }
         }

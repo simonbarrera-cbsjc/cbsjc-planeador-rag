@@ -32,32 +32,44 @@ interface WordPageSheetProps {
 
 /**
  * Robust HTML formatter that cleans raw markdown symbols (**bold**, *italic*, <br>)
- * and converts them to genuine formatted HTML elements.
+ * and converts them to genuine formatted HTML elements, while stripping any dirty HTML tags.
  */
 function cleanAndFormatHtml(text: string | undefined | null): string {
   if (!text) return ''
   let s = String(text).trim()
 
-  // 1. Strip leading hashes (e.g. ###, ####, #####, ######) from text content
+  // 1. First, decode or convert known HTML tags to prevent tag duplication/leaks
+  s = s.replace(/<br\s*\/?>/gi, '\n')
+  s = s.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**')
+  s = s.replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**')
+  s = s.replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*')
+  s = s.replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*')
+  s = s.replace(/<span[^>]*>(.*?)<\/span>/gi, '$1')
+  s = s.replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n')
+  s = s.replace(/<div[^>]*>(.*?)<\/div>/gi, '$1\n')
+  // Strip any remaining unknown HTML tags
+  s = s.replace(/<[^>]+>/g, '')
+
+  // 2. Strip leading hashes (e.g. ###, ####, #####, ######) from text content
   s = s.replace(/^#{1,6}\s*/, '')
 
-  // 2. Convert <br> or <br/> tags to actual line break
-  s = s.replace(/<br\s*\/?>/gi, '<br />')
+  // 3. Convert \n to <br />
+  s = s.replace(/\n/g, '<br />')
 
-  // 3. Bold italic: ***text*** or **_text_**
+  // 4. Bold italic: ***text*** or **_text_**
   s = s.replace(/\*\*\*(.*?)\*\*\*/g, '<strong class="text-[#0E1B4D] font-bold"><em>$1</em></strong>')
   s = s.replace(/\*\*_(.*?)_\*\*/g, '<strong class="text-[#0E1B4D] font-bold"><em>$1</em></strong>')
 
-  // 4. Bold: **text**
+  // 5. Bold: **text**
   s = s.replace(/\*\*(.*?)\*\*/g, '<strong class="text-[#0E1B4D] font-bold">$1</strong>')
 
-  // 5. Italic: *text* (avoiding remaining double asterisks)
+  // 6. Italic: *text* (avoiding remaining double asterisks)
   s = s.replace(/(^|[^*])\*([^*]+?)\*([^*]|$)/g, '$1<em>$2</em>$3')
 
-  // 6. Italic with underscores: _text_
+  // 7. Italic with underscores: _text_
   s = s.replace(/(^|[^_])_([^_]+?)_([^_]|$)/g, '$1<em>$2</em>$3')
 
-  // 7. Remove any leftover loose asterisks and hashes so they NEVER appear to the user
+  // 8. Remove any leftover loose asterisks and hashes so they NEVER appear to the user
   s = s.replace(/\*/g, '')
   s = s.replace(/#{2,}/g, '')
 
@@ -373,7 +385,7 @@ export function WordPageSheet({
                                         block.id,
                                         block.tableData!,
                                         cIdx,
-                                        e.currentTarget.textContent || ''
+                                        e.currentTarget.innerText || e.currentTarget.textContent || ''
                                       )
                                     }
                                     className="w-full bg-transparent text-white font-bold outline-none focus:bg-white/20 p-0.5 rounded text-[11px]"
@@ -422,7 +434,7 @@ export function WordPageSheet({
                                               block.tableData!,
                                               rIdx,
                                               cIdx,
-                                              e.currentTarget.innerHTML || ''
+                                              e.currentTarget.innerText || e.currentTarget.textContent || ''
                                             )
                                           }
                                           className="w-full bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-[#0E1B4D]/40 p-1 rounded text-xs leading-relaxed font-sans"

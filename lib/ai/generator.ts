@@ -198,8 +198,8 @@ Debes producir una redacción EXHAUSTIVA, EXTENSA, PROFUNDA Y SIN RESÚMENES (m�
 
 REGLA FUNDAMENTAL DE FORMATO:
 - La Sección 0 DEBE SER UNA TABLA MARKDOWN (| Identificación | Detalle |).
-- La Sección 1 DEBE SER UNA TABLA MARKDOWN (| Referente Curricular | Contenido y Articulación Institucional |) con EXACTAMENTE 13 FILAS. CADA FILA DEBE TENER ENTRE 10 Y 20 LÍNEAS DE CONTENIDO PEDAGÓGICO COMPLETO. NUNCA USES LISTAS DE PUNTOS EN LUGAR DE LA TABLA.
-- La Sección 2 DEBE TENER EL DESARROLLO ÍNTEGRO SESIÓN A SESIÓN DE LAS 4 SEMANAS (Semana 1: ANTES; Semana 2 y 3: DURANTE; Semana 4: DESPUÉS), con descripciones minuciosas de Warm-up, Core Task, Wrap-up, Consignas Docentes y DUA/PIAR para TDAH.
+- La Sección 1 DEBE SER UNA TABLA MARKDOWN (| Referente Curricular | Contenido y Articulación Institucional |) con EXACTAMENTE 14 FILAS. DEBES INCLUIR FILAS SEPARADAS PARA 'Competencias Fijas (Plan de Área / SIAP)' Y 'Competencias Electivas (Profundización / Énfasis)'. CADA FILA DEBE TENER ENTRE 10 Y 20 LÍNEAS DE CONTENIDO PEDAGÓGICO COMPLETO. NUNCA USES LISTAS DE PUNTOS EN LUGAR DE LA TABLA.
+- La Sección 2 DEBE COMENZAR OBLIGATORIAMENTE CON LA TABLA DE ARCO PEDAGÓGICO DE 3 COLUMNAS (| Momento / Fase | Enfoque Pedagógico | Semanas, Sesiones y Actividades Detalladas |) estructurando Antes, Durante y Después, seguida del desarrollo minucioso de Warm-up, Core Task, Wrap-up, Consignas Docentes y DUA/PIAR para TDAH.
 
 DATOS DE LA SECUENCIA:
 - Docente(s): ${safeDocente}
@@ -215,7 +215,7 @@ ${safeInstructions ? `<docente_instrucciones>\n${safeInstructions}\n</docente_in
 ${formattedContext || 'Utiliza los referentes oficiales del MEN, DBA de Colombia, estándares EBC y lineamientos pedagógicos del Colegio Bilingüe San José Campestre.'}
 </contexto_curricular>
 
-GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN:
+GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN (SIN ETIQUETAS HTML NI CÓDIGO BRUTO):
 
 # Secuencia Didáctica: Antes — Durante — Después · Subciclos 3 a 6
 **Colegio Bilingüe San José Campestre**
@@ -233,7 +233,8 @@ GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN:
 | Referente Curricular | Contenido y Articulación Institucional |
 |---|---|
 | **Meta del subciclo y posición del grado** | (Escribir el subciclo correspondiente, ej. Subciclo 4 — 4.° a 6.° — Descubrimiento del Mundo, declarar posición: Inicia / Desarrolla / Consolida y verifica, y redactar en 15-20 líneas completas el perfil integral de egreso del subciclo). |
-| **Competencia disciplinar (Plan de Área)** | (Redactar 3 competencias disciplinares completas del Plan de Área: Uso comprensivo del conocimiento científico/disciplinar, Explicación de fenómenos, e Indagación guiada con observación in situ). |
+| **Competencias Fijas (Plan de Área / SIAP)** | (Detalle exhaustivo de las competencias fijas obligatorias del área y grado según el Plan de Área y SIAP institucional: 1. Uso comprensivo del conocimiento disciplinar/científico; 2. Explicación de fenómenos y procesos; 3. Indagación guiada con recolección de evidencias). |
+| **Competencias Electivas (Profundización / Énfasis)** | (Detalle exhaustivo de las competencias electivas de profundización, articulación interdisciplinar o énfasis transversal seleccionadas por el docente a partir de los documentos rectores y adaptadas al grupo). |
 | **Estándar Básico de Competencia (EBC)** | (3 estándares oficiales del MEN plenamente citados y articulados al grado). |
 | **Derecho Básico de Aprendizaje (DBA)** | (Código oficial DBA y enunciado curricular completo del Ministerio de Educación Nacional). |
 | **Evidencias de aprendizaje (DBA)** | (Redactar detalladamente: Evidencia 1 Central de la Secuencia, Evidencia Complementaria 2, y Evidencia Complementaria 3 multimodal bilingüe). |
@@ -247,6 +248,12 @@ GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN:
 | **Número de semanas e intervalo de fechas** | ${safeSemanas} |
 
 ## 2. ARCO PEDAGÓGICO DE LA SECUENCIA
+
+| Momento / Fase | Enfoque Pedagógico | Semanas, Sesiones y Actividades Detalladas |
+|---|---|---|
+| **ANTES** | **Conecta y reta**<br>Activación y encuadre inicial | **Semana 1 - Actividad 1: Activación y planificación (producción inicial + roles):**<br>- El docente retoma la pregunta de sentido y presenta el desafío rector o fenómeno del campus de Tienda Nueva.<br>- Cada estudiante elabora una producción inicial (mapa mental, hipótesis exploratoria) respondiendo a la pregunta de sentido.<br>- El docente publica la rúbrica global del informe final (bloque 5); las actividades están diseñadas para alcanzar el nivel Gold.<br>- Se conforman equipos cooperativos de 3-4 integrantes, se asignan roles y se registran metas en el Tablero de Progreso. |
+| **DURANTE** | **Explora, construye y aplica**<br>Indagación profunda, laboratorios y modelado | **Semana 2 - Actividad 2: Análisis de fuentes y primer borrador:**<br>- El docente proporciona un kit de recursos clave (lecturas, datos, vocabulario bilingüe ACE).<br>- Los equipos analizan las fuentes y elaboran una tabla comparativa.<br>- Protocolo de estaciones de aprendizaje activo y registro de datos.<br>- Redacción de la primera sección del informe o evidencia.<br><br>**Semana 3 - Actividad 3: Investigación específica y sección individual:**<br>- Cada equipo selecciona una variable o caso de profundización.<br>- Cada estudiante redacta su propia sección individual del producto aplicando pensamiento crítico.<br>- Pruebas experimentales y coevaluación intermedia con protocolo Praise & Polish. |
+| **DESPUÉS** | **Consolida, evalúa y proyecta**<br>Cierre, sustentación y transferencia | **Semana 4 - Actividad 4: Informe final, sustentación oral A2 y metacognición:**<br>- Consolidación y entrega de la versión final del producto Capstone.<br>- Sustentación oral bilingüe en inglés A2/B1 ante panel evaluador y pares.<br>- Evaluación sumativa con Rúbrica Menú de Desafíos, coevaluación y autoevaluación reflexiva con Ticket de Salida y cierre en el Tablero de Progreso. |
 
 ### ANTES: Conecta y Reta (Semana 1)
 - **Eje Temático:** (Nombre del eje temático y fundamentos de inicio).
@@ -304,12 +311,15 @@ function buildStage2Prompt(params: GeneratePlanningParams, formattedContext: str
 Tu misión es generar la **ETAPA 2** de la Planeación Curricular Maestra bajo el formato oficial **SJB-RGA006 Planning Book**.
 Debes producir una redacción EXHAUSTIVA, EXTENSA, PROFUNDA Y EN FORMATO DE TABLAS MARKDOWN ESTRICTAS (mínimo 12.000 a 18.000 caracteres).
 
-REGLAS DE FORMATO OBLIGATORIAS:
-- La Sección 3 DEBE SER UNA TABLA DE 5 COLUMNAS (| Actividad evaluativa | Semana · momento | Pilar(es) que valora | % dentro del pilar | Rúbrica específica |).
-- La Sección 4 DEBE SER UNA TABLA DE 3 COLUMNAS (| Pilar Institucional | Competencia Evaluada | Manifestación en la Evidencia Principal |).
-- La Sección 5 DEBE SER UNA TABLA DE 5 COLUMNAS (| Pilar · Competencia | Sin categoría (1.0 – 3.9) | Bronze (4.0 – 4.5) Esperado | Silver (4.6 – 4.7) Profundización | Gold (4.8 – 5.0) Excelencia |) con DESCRIPTORES ANALÍTICOS DE 6 A 10 LÍNEAS POR CELDA.
-- La Sección 6 DEBE SER EL BLOQUE PARA CIBERCOLEGIOS.
-- La Sección 7 DEBE SER LA BITÁCORA (TABLA 2 COLUMNAS) Y LA TABLA DE 3 FIRMAS (| ELABORÓ | REVISÓ | APROBÓ |).
+REGLAS DE FORMATO Y EVALUACIÓN OBLIGATORIAS:
+1. La Sección 3 DEBE SER UNA TABLA DE 5 COLUMNAS (| Actividad evaluativa | Semana · momento | Pilar(es) que valora | % dentro del pilar | Rúbrica específica (síntesis coherente con la global) |).
+   IMPORTANTE: EN LA COLUMNA '% DENTRO DEL PILAR', ASIGNA PORCENTAJES PEQUEÑOS Y PONDERADOS POR CADA ACTIVIDAD (ej. SABER 3%, SABER HACER 6%, SABER SER 2%, SABER CONVIVIR 1%), NUNCA COLOQUES EL 25% O 35% TOTAL EN UNA SOLA ACTIVIDAD. Los porcentajes de cada actividad deben sumar la porción evaluada en la secuencia.
+2. La Sección 4 DEBE SER UNA TABLA DE 3 COLUMNAS (| Pilar Institucional | Competencia(s) Evaluada(s) | Manifestación en la Evidencia Principal |).
+   IMPORTANTE: EN LA COLUMNA 'Competencia(s) Evaluada(s)' PUEDES Y DEBES INCLUIR MÁS DE UNA COMPETENCIA POR PILAR (ej. 'Competencia histórica y ciudadana (común) + Competencia lectora y crítica (común)' o 'Uso comprensivo del conocimiento + Explicación de fenómenos') para dar total flexibilidad al docente.
+3. La Sección 5 DEBE SER UNA TABLA DE 5 COLUMNAS (| Pilar · Competencia | Sin categoría (1.0 – 3.9) | Bronze (4.0 – 4.5) Esperado | Silver (4.6 – 4.7) Profundización | Gold (4.8 – 5.0) Excelencia |) con DESCRIPTORES ANALÍTICOS DE 6 A 10 LÍNEAS POR CELDA.
+4. La Sección 6 DEBE SER EL BLOQUE PARA CIBERCOLEGIOS.
+5. La Sección 7 DEBE SER LA BITÁCORA (TABLA 2 COLUMNAS) Y LA TABLA DE 3 FIRMAS (| ELABORÓ | REVISÓ | APROBÓ |).
+6. NO INCLUYAS ETIQUETAS HTML CRUDAS (<strong class="...">, </span>, etc.). USA EXCLUSIVAMENTE MARKDOWN LIMPIO (**negrilla**, *cursiva*).
 
 DATOS DE LA SECUENCIA:
 - Docente(s): ${safeDocente}
@@ -325,21 +335,21 @@ GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN:
 
 | Actividad evaluativa | Semana · momento | Pilar(es) que valora | % dentro del pilar | Rúbrica específica (síntesis coherente con la global) |
 |---|---|---|---|---|
-| **1. Actividad Formativa Inicial (Ficha de Indagación y Diagnóstico)** | Semana 1 (ANTES) | SABER (35%) / SABER HACER (35%) | SABER: 30%<br>HACER: 25% | (Describir criterios específicos para esta actividad) |
-| **2. Taller Práctico / Laboratorio de Profundización y Estaciones** | Semana 2 (DURANTE) | SABER (35%) / SABER HACER (35%) | SABER: 35%<br>HACER: 25% | (Describir criterios específicos para esta actividad) |
-| **3. Desarrollo y Modelado de la Evidencia Principal (Capstone)** | Semana 3 (DURANTE) | SABER (35%) / SABER HACER (35%) / SABER SER (20%) | SABER: 35%<br>HACER: 25%<br>SER: 50% | (Describir criterios específicos para esta actividad) |
-| **4. Producto Capstone Final + Sustentación Oral A2** | Semana 4 (DESPUÉS) | SABER HACER (35%) / SABER SER (20%) / SABER CONVIVIR (10%) | HACER: 25%<br>SER: 50%<br>CONVIVIR: 100% | (Describir criterios específicos para esta actividad) |
+| **Actividad 1: Activación y planificación (producción inicial + roles)** | Semana 1 - ANTES | SABER · SABER SER · SABER CONVIVIR | SABER: 3%<br>SABER SER: 2%<br>SABER CONVIVIR: 1% | Rúbrica de activación: organización de roles, preguntas iniciales, mapa mental de ideas previas y compromiso del equipo. |
+| **Actividad 2: Análisis de fuentes y primer borrador** | Semana 2 - DURANTE | SABER · SABER HACER · SABER SER · SABER CONVIVIR | SABER: 5%<br>SABER HACER: 6%<br>SABER SER: 2%<br>SABER CONVIVIR: 1.5% | Rúbrica de análisis y borrador: extracción de datos, tabla comparativa, protocolos de laboratorio y calidad de la sección preliminar. |
+| **Actividad 3: Investigación específica y sección individual** | Semana 3 - DURANTE | SABER · SABER HACER · SABER SER · SABER CONVIVIR | SABER: 4%<br>SABER HACER: 6%<br>SABER SER: 1%<br>SABER CONVIVIR: 1.5% | Rúbrica de aporte individual: profundidad del análisis disciplinar, propuesta de solución y rigor de la redacción técnica. |
+| **Actividad 4: Informe final, sustentación oral A2 y metacognición** | Semana 4 - DESPUÉS | SABER · SABER HACER · SABER SER · SABER CONVIVIR | SABER: 3%<br>SABER HACER: 5.5%<br>SABER SER: 3%<br>SABER CONVIVIR: 1% | Rúbrica global (bloque 5) aplicada al informe final; rúbrica de sustentación oral en inglés A2; rúbrica de metacognición. |
 
-*(Verificación matemática institucional: La suma de porcentajes dentro de cada pilar individual suma exactamente 100%: SABER = 30%+35%+35% = 100%; SABER HACER = 25%+25%+25%+25% = 100%; SABER SER = 50%+50% = 100%; SABER CONVIVIR = 100%).*
+*(Verificación matemática institucional: La suma acumulada de las 4 actividades evalúa la porción asignada a esta secuencia dentro del periodo: SABER = 3%+5%+4%+3% = 15%; SABER HACER = 6%+6%+5.5% = 17.5%; SABER SER = 2%+2%+1%+3% = 8%; SABER CONVIVIR = 1%+1.5%+1.5%+1% = 5%. Cada actividad evalúa porcentajes pequeños que suman coherentemente al acumulado del periodo).*
 
 ## 4. PILARES Y COMPETENCIAS INSTITUCIONALES EN ESTA SECUENCIA
 
-| Pilar Institucional | Competencia Evaluada | Manifestación en la Evidencia Principal |
+| Pilar Institucional | Competencia(s) Evaluada(s) | Manifestación en la Evidencia Principal |
 |---|---|---|
-| **SABER (35%)** | Dimensión Cognitiva y Conceptual: Uso comprensivo del conocimiento y explicación de fenómenos. | (Describir exhaustivamente cómo el estudiante demuestra dominio de conceptos, relaciones y principios disciplinares en el producto final). |
-| **SABER HACER (35%)** | Dimensión Procedimental y Bilingüismo: Modelación, indagación experimental y comunicación oral en inglés A2. | (Describir cómo se evidencia la destreza técnica, rotulación bilingüe y sustentación oral en el producto final). |
-| **SABER SER (20%)** | Dimensión Actitudinal y Autonomía: Mentalidad de crecimiento, persistencia, autocuidado y diligenciamiento del Tablero de Progreso. | (Describir cómo se refleja la autorregulación, puntualidad y superación de dificultades en la secuencia). |
-| **SABER CONVIVIR (10%)** | Dimensión Relacional y Colaborativa: Trabajo en equipo cooperativo, coevaluación respetuosa (Praise & Polish) y compromiso ambiental PRAE. | (Describir cómo se evidencia el liderazgo positivo, respeto de turnos y aporte al cuidado del campus de Tienda Nueva). |
+| **SABER (35%)** | Dimensión Cognitiva y Conceptual: Uso comprensivo del conocimiento disciplinar (común) + Explicación de fenómenos (común) | El estudiante explica con precisión analítica, relaciones causales y vocabulario técnico cómo interactúan los conceptos disciplinares y formula explicaciones fundamentadas en el producto final. |
+| **SABER HACER (35%)** | Dimensión Procedimental y Bilingüe: Pensamiento crítico y resolución de problemas (común) + Indagación e investigación (común) + Comunicación oral en inglés A2 | Modela representaciones técnicas de alta calidad, ejecuta experimentos en estaciones de laboratorio, registra datos empíricos y sustenta oralmente con solvencia en inglés A2/B1. |
+| **SABER SER (20%)** | Dimensión Actitudinal y Autonomía: Autonomía y mentalidad de crecimiento (común) + Ética y autocuidado | Demuestra autorregulación, persistencia frente a desafíos, mejora su desempeño mediante la reentrega formativa y diligencia con honestidad el Tablero de Progreso. |
+| **SABER CONVIVIR (10%)** | Dimensión Relacional y Colaborativa: Colaboración y trabajo en equipo (común) + Conciencia ambiental PRAE | Cumple activamente el rol asignado en el equipo cooperativo, practica la coevaluación respetuosa (Praise & Polish), escucha a sus pares y cuida el entorno natural en Tienda Nueva. |
 
 ## 5. RÚBRICA GLOBAL DE LA EVIDENCIA DE APRENDIZAJE · MENÚ DE DESAFÍOS
 
