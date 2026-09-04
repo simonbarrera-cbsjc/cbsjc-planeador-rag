@@ -212,7 +212,7 @@ export function Footer({ className = '', compact = false }: FooterProps) {
           <div className="flex items-center gap-3 text-[11px] text-slate-300 flex-wrap justify-center">
             <span className="text-white font-semibold">Planning Book SJB-RGA006</span>
             <span>•</span>
-            <span>Google Gemini Flash</span>
+            <span>Apoyado en Gemini</span>
             <span>•</span>
             <span className="font-semibold text-slate-200">Bogotá D.C., Colombia</span>
           </div>

@@ -22,9 +22,9 @@ Sistema institucional de generación de documentos mediante RAG (Retrieval-Augme
 | Auth | Supabase Auth (Google OAuth) |
 | Base de datos | Supabase PostgreSQL + pgvector |
 | Storage | Supabase Storage |
-| Embeddings | Google AI Studio — `text-embedding-004` |
-| Generación | Google AI Studio — `gemini-2.0-flash` |
-| PDF | @react-pdf/renderer |
+| Embeddings | Google AI Studio — Embeddings |
+| Generación | Google AI Studio — Apoyado en Gemini |
+| PDF | PDFKit (npm) |
 | Word | docx (npm) |
 | Google Docs | Google Drive API |
 | Deploy | Vercel |

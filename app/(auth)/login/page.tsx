@@ -220,7 +220,7 @@ export default function LoginPage() {
               </span>
             </h1>
             <p className="text-slate-300 text-base sm:text-lg max-w-2xl font-normal leading-relaxed">
-              Genera en un único flujo de trabajo la secuencia didáctica <strong className="text-white font-semibold">Planning Book (SJB-RGA006)</strong>, las <strong className="text-white font-semibold">Rúbricas Evaluativas</strong> y la <strong className="text-white font-semibold">Planilla de Notas en Excel</strong> con la precisión de <strong className="text-white font-semibold">Gemini 2.0 Flash</strong> y el motor <strong className="text-white font-semibold">RAG de Supabase</strong>.
+              Genera en un único flujo de trabajo la secuencia didáctica <strong className="text-white font-semibold">Planning Book (SJB-RGA006)</strong>, las <strong className="text-white font-semibold">Rúbricas Evaluativas</strong> y la <strong className="text-white font-semibold">Planilla de Notas en Excel</strong>, <strong className="text-white font-semibold">apoyado en Gemini</strong> y el motor <strong className="text-white font-semibold">RAG de Supabase</strong>.
             </p>
           </div>
 

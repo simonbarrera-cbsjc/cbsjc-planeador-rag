@@ -84,7 +84,7 @@ export default async function DashboardPage() {
             </Badge>
             <Badge className="bg-emerald-950/60 border-emerald-500/40 text-emerald-300 text-[11px] px-3 py-1 font-semibold flex items-center gap-1.5 backdrop-blur-md">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              RAG Gemini 2.0 Flash
+              Apoyado en Gemini
             </Badge>
             <Badge className="bg-[#030C26] border-[#A6174B]/40 text-pink-200 text-[11px] px-3 py-1 font-semibold flex items-center gap-1.5 shadow-[0_0_10px_rgba(166,23,75,0.2)]">
               <Cpu className="h-3.5 w-3.5 text-[#A6174B]" />
