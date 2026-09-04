@@ -8,8 +8,9 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 })
 
 async function setupTestUser() {
-  const email = 'simon.barrera@sanjosebilingue.edu.co'
-  const password = 'cbsjcPassword2026!'
+  const email = process.argv[2] || process.env.INITIAL_ADMIN_EMAIL || 'admin@sanjosebilingue.edu.co'
+  const password = process.argv[3] || process.env.INITIAL_ADMIN_PASSWORD || 'TempPassword2026!'
+  const fullName = process.argv[4] || 'Administrador CBSJC'
 
   console.log(`Checking or creating user: ${email}...`)
 
@@ -28,7 +29,7 @@ async function setupTestUser() {
       password,
       email_confirm: true,
       user_metadata: {
-        full_name: 'Simón Barrera',
+        full_name: fullName,
       },
     })
     if (createErr) {
@@ -54,7 +55,7 @@ async function setupTestUser() {
   const { error: profileErr } = await supabase.from('profiles').upsert({
     id: user.id,
     email: user.email,
-    full_name: 'Simón Barrera',
+    full_name: fullName,
     role: 'admin',
   })
 

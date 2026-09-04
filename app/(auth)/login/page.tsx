@@ -37,8 +37,8 @@ export default function LoginPage() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [isLoading, setIsLoading] = useState(false)
   const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('simon.barrera@sanjosebilingue.edu.co')
-  const [password, setPassword] = useState('cbsjcPassword2026!')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [honeypot, setHoneypot] = useState('') // Anti-bot honeypot trap
 
