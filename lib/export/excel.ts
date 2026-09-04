@@ -7,6 +7,7 @@ export interface ExcelGenerationParams {
   grado: string
   periodo: string
   semanas?: string
+  semanasEfectivas?: string
   tema: string
   evidenciaPrincipal?: string
   actividades?: Array<{
@@ -96,9 +97,11 @@ export async function generateGradeSpreadsheet(params: ExcelGenerationParams): P
   sheet.getCell('C6').value = params.tema || 'Secuencia Didáctica'
   sheet.getCell('C6').style = valStyle
 
-  sheet.getCell('E6').value = 'Semanas / Sesiones:'
+  sheet.getCell('E6').value = 'Semanas / Efectivas:'
   sheet.getCell('E6').style = metaStyle
-  sheet.getCell('F6').value = params.semanas || '4 Semanas (90 min c/u)'
+  sheet.getCell('F6').value = params.semanasEfectivas
+    ? `${params.semanas || '4 Semanas'} (${params.semanasEfectivas})`
+    : (params.semanas || '4 Semanas (90 min c/u)')
   sheet.getCell('F6').style = valStyle
 
   // 3. Table Headers

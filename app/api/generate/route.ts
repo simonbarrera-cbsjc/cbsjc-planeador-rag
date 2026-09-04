@@ -44,6 +44,7 @@ const generateFormSchema = z.object({
   grado: z.string().trim().max(100, 'El grado no puede superar 100 caracteres').default(''),
   periodo: z.enum(['I', 'II', 'III', 'IV']).default('I'),
   semanas: z.string().trim().max(150, 'El campo semanas no puede superar 150 caracteres').default('4 semanas (sesiones de 90 min)'),
+  semanasEfectivas: z.string().trim().max(150, 'El campo semanas efectivas no puede superar 150 caracteres').default('4 semanas efectivas de clase directa'),
   tema: z.string().trim().min(1, 'El tema o pregunta de sentido es obligatorio').max(300, 'El tema no puede superar 300 caracteres'),
   additionalInstructions: z.string().trim().max(3000, 'Las instrucciones adicionales no pueden superar 3000 caracteres').default(''),
 })
@@ -100,6 +101,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     grado: String(formData.get('grado') || '').trim(),
     periodo: normalizedPeriodo,
     semanas: String(formData.get('semanas') || '4 semanas (sesiones de 90 min)').trim(),
+    semanasEfectivas: String(formData.get('semanasEfectivas') || formData.get('semanas_efectivas') || '4 semanas efectivas de clase directa').trim(),
     tema: String(formData.get('tema') || formData.get('title') || 'Secuencia Didáctica').trim(),
     additionalInstructions: String(formData.get('additionalInstructions') || formData.get('instrucciones') || '').trim(),
   }
@@ -112,7 +114,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
   }
 
-  const { docente, area, grado, periodo, semanas, tema, additionalInstructions } = parsedFields.data
+  const { docente, area, grado, periodo, semanas, semanasEfectivas, tema, additionalInstructions } = parsedFields.data
 
   // Extract uploaded files
   const planDeAreaFile = formData.get('plan_de_area') as File | null
@@ -268,6 +270,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       grado,
       periodo: normalizedPeriodo,
       semanas,
+      semanasEfectivas,
       tema,
       additionalInstructions,
       language: 'es',
@@ -286,6 +289,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         grado,
         periodo: normalizedPeriodo,
         semanas,
+        semanasEfectivas,
         tema,
         files: contextDocs.map((d) => ({ tipo: d.tipo, name: d.filename })),
       },

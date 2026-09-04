@@ -34,6 +34,7 @@ export interface GeneratePlanningParams {
   grado: string
   periodo: Periodo | string
   semanas?: string
+  semanasEfectivas?: string
   tema: string
   additionalInstructions?: string
   language?: Language
@@ -180,15 +181,16 @@ async function callGenerativeModel(prompt: string, maxOutputTokens = 65536): Pro
 }
 
 /**
- * Stage 1 Prompt: Identificación, 13 Referentes de Calidad (Tabla) y Arco Pedagógico (Semanas 1 a 4)
+ * Stage 1 Prompt: Identificación, 13 Referentes de Calidad (Tabla) y Arco Pedagógico (Semanas Efectivas)
  */
 function buildStage1Prompt(params: GeneratePlanningParams, formattedContext: string): string {
-  const { docente, area, grado, periodo, semanas, tema, additionalInstructions } = params
+  const { docente, area, grado, periodo, semanas, semanasEfectivas, tema, additionalInstructions } = params
   const safeDocente = sanitizeInputText(docente, 200)
   const safeArea = sanitizeInputText(area, 200)
   const safeGrado = sanitizeInputText(grado, 100)
   const safePeriodo = sanitizeInputText(String(periodo), 50)
   const safeSemanas = sanitizeInputText(semanas || '4 semanas (16 horas de clase — sesiones de 90 min)', 150)
+  const safeSemanasEfectivas = sanitizeInputText(semanasEfectivas || '4 semanas efectivas de clase directa', 150)
   const safeTema = sanitizeInputText(tema, 300)
   const safeInstructions = sanitizeInputText(additionalInstructions, 3000)
 
@@ -199,14 +201,15 @@ Debes producir una redacción EXHAUSTIVA, EXTENSA, PROFUNDA Y SIN RESÚMENES (m�
 REGLA FUNDAMENTAL DE FORMATO:
 - La Sección 0 DEBE SER UNA TABLA MARKDOWN (| Identificación | Detalle |).
 - La Sección 1 DEBE SER UNA TABLA MARKDOWN (| Referente Curricular | Contenido y Articulación Institucional |) con EXACTAMENTE 14 FILAS. DEBES INCLUIR FILAS SEPARADAS PARA 'Competencias Fijas (Plan de Área / SIAP)' Y 'Competencias Electivas (Profundización / Énfasis)'. CADA FILA DEBE TENER ENTRE 10 Y 20 LÍNEAS DE CONTENIDO PEDAGÓGICO COMPLETO. NUNCA USES LISTAS DE PUNTOS EN LUGAR DE LA TABLA.
-- La Sección 2 DEBE COMENZAR OBLIGATORIAMENTE CON LA TABLA DE ARCO PEDAGÓGICO DE 3 COLUMNAS (| Momento / Fase | Enfoque Pedagógico | Semanas, Sesiones y Actividades Detalladas |) estructurando Antes, Durante y Después, seguida del desarrollo minucioso de Warm-up, Core Task, Wrap-up, Consignas Docentes y DUA/PIAR para TDAH.
+- La Sección 2 DEBE COMENZAR OBLIGATORIAMENTE CON LA TABLA DE ARCO PEDAGÓGICO DE 3 COLUMNAS (| Momento / Fase | Enfoque Pedagógico | Semanas, Sesiones y Actividades Detalladas |) estructurando Antes, Durante y Después distribuidas a lo largo de las ${safeSemanasEfectivas}, seguida del desarrollo minucioso de Warm-up, Core Task, Wrap-up, Consignas Docentes y DUA/PIAR para TDAH.
 
 DATOS DE LA SECUENCIA:
 - Docente(s): ${safeDocente}
 - Área / Asignatura: ${safeArea}
 - Grado / Grupo: ${safeGrado}
 - Período / Subciclo: ${safePeriodo} (Año Lectivo 2026)
-- Semanas / Intervalo: ${safeSemanas}
+- Intervalo de Fechas / Semanas Totales: ${safeSemanas}
+- Semanas Efectivas de Clase Directa: ${safeSemanasEfectivas}
 - Tema o Pregunta de Sentido: ${safeTema}
 
 ${safeInstructions ? `<docente_instrucciones>\n${safeInstructions}\n</docente_instrucciones>` : ''}
@@ -226,7 +229,8 @@ GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN (SIN ETIQUETAS HTML NI CÓDIGO BRUTO)
 | **Área / Asignatura** | ${safeArea} |
 | **Grado / Grupo** | ${safeGrado} |
 | **Período / Subciclo** | ${safePeriodo} (Año Lectivo 2026) |
-| **Fecha(s) / Semanas** | ${safeSemanas} |
+| **Fecha(s) / Semanas Totales** | ${safeSemanas} |
+| **Semanas Efectivas de Clase** | ${safeSemanasEfectivas} (docencia directa, sin contar exámenes ni eventos) |
 
 ## 1. IDENTIFICACIÓN Y REFERENTES DE CALIDAD
 
@@ -245,7 +249,7 @@ GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN (SIN ETIQUETAS HTML NI CÓDIGO BRUTO)
 | **Componente ACE del período** | **Alcance:** Aplicación disciplinar en el área.<br>**Meta ACE:** En nivel A2/B1, describe y sustenta oralmente en inglés...<br>**Núcleo Lingüístico:** (Mínimo 15 términos disciplinares en inglés con traducción).<br>**Expresiones Funcionales:** (Mínimo 5 estructuras de oración completas para producción oral y escrita). |
 | **Instrumento · nombre de la nota en Cibercolegios** | (Nombre exacto del instrumento para la planilla con porcentajes de pilares y rúbrica Menú de Desafíos). |
 | **Proyecto integrador al que aporta** | (Articulación exhaustiva con el Proyecto Transversal PRAE Institucional SJB-PGA012 'Biodiversidad en Tienda Nueva: conocer para conservar' y aporte concreto de la secuencia). |
-| **Número de semanas e intervalo de fechas** | ${safeSemanas} |
+| **Número de semanas e intervalo de fechas** | ${safeSemanas} (${safeSemanasEfectivas} de docencia directa) |
 
 ## 2. ARCO PEDAGÓGICO DE LA SECUENCIA
 
@@ -254,6 +258,8 @@ GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN (SIN ETIQUETAS HTML NI CÓDIGO BRUTO)
 | **ANTES** | **Conecta y reta**<br>Activación y encuadre inicial | **Semana 1 - Actividad 1: Activación y planificación (producción inicial + roles):**<br>- El docente retoma la pregunta de sentido y presenta el desafío rector o fenómeno del campus de Tienda Nueva.<br>- Cada estudiante elabora una producción inicial (mapa mental, hipótesis exploratoria) respondiendo a la pregunta de sentido.<br>- El docente publica la rúbrica global del informe final (bloque 5); las actividades están diseñadas para alcanzar el nivel Gold.<br>- Se conforman equipos cooperativos de 3-4 integrantes, se asignan roles y se registran metas en el Tablero de Progreso. |
 | **DURANTE** | **Explora, construye y aplica**<br>Indagación profunda, laboratorios y modelado | **Semana 2 - Actividad 2: Análisis de fuentes y primer borrador:**<br>- El docente proporciona un kit de recursos clave (lecturas, datos, vocabulario bilingüe ACE).<br>- Los equipos analizan las fuentes y elaboran una tabla comparativa.<br>- Protocolo de estaciones de aprendizaje activo y registro de datos.<br>- Redacción de la primera sección del informe o evidencia.<br><br>**Semana 3 - Actividad 3: Investigación específica y sección individual:**<br>- Cada equipo selecciona una variable o caso de profundización.<br>- Cada estudiante redacta su propia sección individual del producto aplicando pensamiento crítico.<br>- Pruebas experimentales y coevaluación intermedia con protocolo Praise & Polish. |
 | **DESPUÉS** | **Consolida, evalúa y proyecta**<br>Cierre, sustentación y transferencia | **Semana 4 - Actividad 4: Informe final, sustentación oral A2 y metacognición:**<br>- Consolidación y entrega de la versión final del producto Capstone.<br>- Sustentación oral bilingüe en inglés A2/B1 ante panel evaluador y pares.<br>- Evaluación sumativa con Rúbrica Menú de Desafíos, coevaluación y autoevaluación reflexiva con Ticket de Salida y cierre en el Tablero de Progreso. |
+
+*(Nota pedagógica: Adapta la distribución de los momentos Antes, Durante y Después a las ${safeSemanasEfectivas} indicadas por el docente).*
 
 ### ANTES: Conecta y Reta (Semana 1)
 - **Eje Temático:** (Nombre del eje temático y fundamentos de inicio).
@@ -299,12 +305,13 @@ GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN (SIN ETIQUETAS HTML NI CÓDIGO BRUTO)
  * Stage 2 Prompt: Plan de Evaluación Continua, Pilares, Rúbrica Menú de Desafíos, Cibercolegios y Firmas
  */
 function buildStage2Prompt(params: GeneratePlanningParams, formattedContext: string): string {
-  const { docente, area, grado, periodo, semanas, tema } = params
+  const { docente, area, grado, periodo, semanas, semanasEfectivas, tema } = params
   const safeDocente = sanitizeInputText(docente, 200)
   const safeArea = sanitizeInputText(area, 200)
   const safeGrado = sanitizeInputText(grado, 100)
   const safePeriodo = sanitizeInputText(String(periodo), 50)
   const safeSemanas = sanitizeInputText(semanas || '4 semanas', 150)
+  const safeSemanasEfectivas = sanitizeInputText(semanasEfectivas || '4 semanas efectivas de clase directa', 150)
   const safeTema = sanitizeInputText(tema, 300)
 
   return `Eres el Diseñador Curricular y Asistente Pedagógico Oficial del Colegio Bilingüe San José Campestre (CBSJC).
@@ -313,7 +320,13 @@ Debes producir una redacción EXHAUSTIVA, EXTENSA, PROFUNDA Y EN FORMATO DE TABL
 
 REGLAS DE FORMATO Y EVALUACIÓN OBLIGATORIAS:
 1. La Sección 3 DEBE SER UNA TABLA DE 5 COLUMNAS (| Actividad evaluativa | Semana · momento | Pilar(es) que valora | % dentro del pilar | Rúbrica específica (síntesis coherente con la global) |).
-   IMPORTANTE: EN LA COLUMNA '% DENTRO DEL PILAR', ASIGNA PORCENTAJES PEQUEÑOS Y PONDERADOS POR CADA ACTIVIDAD (ej. SABER 3%, SABER HACER 6%, SABER SER 2%, SABER CONVIVIR 1%), NUNCA COLOQUES EL 25% O 35% TOTAL EN UNA SOLA ACTIVIDAD. Los porcentajes de cada actividad deben sumar la porción evaluada en la secuencia.
+   IMPORTANTE - CALIBRACIÓN MATEMÁTICA SEGÚN SEMANAS EFECTIVAS:
+   - La planeación cuenta con **${safeSemanasEfectivas}** dentro de un marco de ${safeSemanas}.
+   - Debes distribuir las actividades evaluativas exactamente entre las **${safeSemanasEfectivas}** de clase.
+   - En la columna '% DENTRO DEL PILAR', asigna micro-porcentajes pequeños y ponderados por cada actividad (ej. SABER 2% a 5%, SABER HACER 4% a 6%, SABER SER 1% a 3%, SABER CONVIVIR 1% a 2%).
+   - NUNCA coloques el 25% o 35% total en una sola actividad.
+   - La sumatoria de los micro-porcentajes evaluados a lo largo de las semanas efectivas DEBE SUMAR CON EXACTITUD MATEMÁTICA el porcentaje total acumulado asignado a la secuencia en el periodo lectivo (ej. SABER 15% a 35%, SABER HACER 17.5% a 35%, SABER SER 8% a 20%, SABER CONVIVIR 5% a 10%).
+   - Incluye OBLIGATORIAMENTE al pie de la tabla la nota de verificación matemática institucional desglosando la suma de las semanas efectivas.
 2. La Sección 4 DEBE SER UNA TABLA DE 3 COLUMNAS (| Pilar Institucional | Competencia(s) Evaluada(s) | Manifestación en la Evidencia Principal |).
    IMPORTANTE: EN LA COLUMNA 'Competencia(s) Evaluada(s)' PUEDES Y DEBES INCLUIR MÁS DE UNA COMPETENCIA POR PILAR (ej. 'Competencia histórica y ciudadana (común) + Competencia lectora y crítica (común)' o 'Uso comprensivo del conocimiento + Explicación de fenómenos') para dar total flexibilidad al docente.
 3. La Sección 5 DEBE SER UNA TABLA DE 5 COLUMNAS (| Pilar · Competencia | Sin categoría (1.0 – 3.9) | Bronze (4.0 – 4.5) Esperado | Silver (4.6 – 4.7) Profundización | Gold (4.8 – 5.0) Excelencia |) con DESCRIPTORES ANALÍTICOS DE 6 A 10 LÍNEAS POR CELDA.
@@ -326,7 +339,8 @@ DATOS DE LA SECUENCIA:
 - Área / Asignatura: ${safeArea}
 - Grado / Grupo: ${safeGrado}
 - Período: ${safePeriodo} (Año Lectivo 2026)
-- Semanas: ${safeSemanas}
+- Intervalo de Semanas / Fechas: ${safeSemanas}
+- Semanas Efectivas de Clase: ${safeSemanasEfectivas}
 - Tema: ${safeTema}
 
 GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN:
@@ -340,7 +354,7 @@ GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN:
 | **Actividad 3: Investigación específica y sección individual** | Semana 3 - DURANTE | SABER · SABER HACER · SABER SER · SABER CONVIVIR | SABER: 4%<br>SABER HACER: 6%<br>SABER SER: 1%<br>SABER CONVIVIR: 1.5% | Rúbrica de aporte individual: profundidad del análisis disciplinar, propuesta de solución y rigor de la redacción técnica. |
 | **Actividad 4: Informe final, sustentación oral A2 y metacognición** | Semana 4 - DESPUÉS | SABER · SABER HACER · SABER SER · SABER CONVIVIR | SABER: 3%<br>SABER HACER: 5.5%<br>SABER SER: 3%<br>SABER CONVIVIR: 1% | Rúbrica global (bloque 5) aplicada al informe final; rúbrica de sustentación oral en inglés A2; rúbrica de metacognición. |
 
-*(Verificación matemática institucional: La suma acumulada de las 4 actividades evalúa la porción asignada a esta secuencia dentro del periodo: SABER = 3%+5%+4%+3% = 15%; SABER HACER = 6%+6%+5.5% = 17.5%; SABER SER = 2%+2%+1%+3% = 8%; SABER CONVIVIR = 1%+1.5%+1.5%+1% = 5%. Cada actividad evalúa porcentajes pequeños que suman coherentemente al acumulado del periodo).*
+*(Verificación matemática institucional: La suma acumulada de las actividades a lo largo de las ${safeSemanasEfectivas} evalúa con rigor el porcentaje asignado a la secuencia en el periodo lectivo: SABER = 3%+5%+4%+3% = 15%; SABER HACER = 6%+6%+5.5% = 17.5%; SABER SER = 2%+2%+1%+3% = 8%; SABER CONVIVIR = 1%+1.5%+1.5%+1% = 5%. Cada semana efectiva evalúa micro-porcentajes ponderados que totalizan la meta del periodo).*
 
 ## 4. PILARES Y COMPETENCIAS INSTITUCIONALES EN ESTA SECUENCIA
 
@@ -586,7 +600,8 @@ export async function generatePlanningDocument(
     area: params.area,
     grado: params.grado,
     periodo: String(params.periodo),
-    semanas: params.semanas || '4 semanas',
+    semanas: params.semanas ? `${params.semanas} (${params.semanasEfectivas || '4 semanas efectivas'})` : '4 semanas',
+    semanasEfectivas: params.semanasEfectivas || '4 semanas efectivas',
     tema: params.tema,
     evidenciaPrincipal: `Evidencia principal: ${params.tema}`,
     actividades: [

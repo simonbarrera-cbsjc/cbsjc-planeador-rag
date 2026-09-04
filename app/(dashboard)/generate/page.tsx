@@ -76,6 +76,7 @@ export default function GeneratePage() {
   const [grado, setGrado] = useState('Grado 6°')
   const [periodo, setPeriodo] = useState('Periodo I')
   const [semanas, setSemanas] = useState('4 semanas (sesiones de 90 min)')
+  const [semanasEfectivas, setSemanasEfectivas] = useState('4 semanas efectivas de clase directa')
   const [tema, setTema] = useState('')
   const [additionalInstructions, setAdditionalInstructions] = useState('')
 
@@ -227,6 +228,7 @@ export default function GeneratePage() {
       formData.append('grado', grado)
       formData.append('periodo', periodo)
       formData.append('semanas', semanas.trim())
+      formData.append('semanasEfectivas', semanasEfectivas.trim())
       formData.append('tema', tema.trim())
       formData.append('additionalInstructions', additionalInstructions.trim())
 
@@ -545,7 +547,7 @@ export default function GeneratePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="grado">Grado / Grupo *</Label>
                 <Select value={grado} onValueChange={setGrado}>
@@ -579,16 +581,34 @@ export default function GeneratePage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="semanas">Número de Semanas / Fechas</Label>
+                <Label htmlFor="semanas">Semanas Totales / Fechas</Label>
                 <Input
                   id="semanas"
-                  placeholder="Ej: 4 semanas (Semana 1 a 4) · 90 min"
+                  placeholder="Ej: 4 semanas (1 feb - 28 feb)"
                   value={semanas}
                   onChange={(e) => setSemanas(e.target.value)}
                   className="rounded-xl"
                 />
               </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="semanasEfectivas" className="flex items-center justify-between text-[#0E1B4D] font-bold">
+                  <span>Semanas Efectivas *</span>
+                  <Badge variant="outline" className="text-[9px] text-[#162874] border-[#162874]/30">Docencia neta</Badge>
+                </Label>
+                <Input
+                  id="semanasEfectivas"
+                  placeholder="Ej: 4 semanas efectivas de clase (o 3)"
+                  value={semanasEfectivas}
+                  onChange={(e) => setSemanasEfectivas(e.target.value)}
+                  className="rounded-xl font-medium border-[#162874]/40 bg-blue-50/20"
+                />
+              </div>
             </div>
+
+            <p className="text-[11px] text-slate-500 -mt-2">
+              💡 <strong>Semanas efectivas de clase:</strong> Número de semanas de clase directa en aula (excluyendo semanas de exámenes institucionales, eventos o recesos). El sistema distribuirá los <strong>micro-porcentajes evaluativos (SABER, HACER, SER, CONVIVIR)</strong> entre estas semanas efectivas de modo que su sumatoria exacta dé el porcentaje total del período.
+            </p>
 
             <div className="space-y-1.5">
               <Label htmlFor="tema" className={validationErrors.some(e => e.includes('Tema')) ? 'text-red-600 font-bold' : ''}>
