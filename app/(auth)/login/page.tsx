@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -8,7 +8,6 @@ import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
 import {
   Sparkles,
@@ -26,7 +25,7 @@ import {
   EyeOff,
   UserPlus,
   LogIn,
-  Layers,
+  RotateCcw,
 } from 'lucide-react'
 
 export default function LoginPage() {
@@ -34,7 +33,7 @@ export default function LoginPage() {
   const { toast } = useToast()
   const supabase = createClient()
 
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin')
   const [isLoading, setIsLoading] = useState(false)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -42,12 +41,27 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [honeypot, setHoneypot] = useState('') // Anti-bot honeypot trap
 
+  // Check URL parameters for auth callback notifications
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const errorParam = params.get('error')
+      if (errorParam === 'auth_callback_failed') {
+        toast({
+          title: 'Aviso de autenticación',
+          description:
+            'Si estabas validando tu cuenta por correo, ahora puedes iniciar sesión directamente o restablecer tu contraseña si es necesario.',
+          variant: 'warning',
+        })
+      }
+    }
+  }, [toast])
+
   // Handle Login
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (honeypot) {
-      // Honeypot triggered: simulate processing delay without executing auth
       setIsLoading(true)
       await new Promise((res) => setTimeout(res, 1200))
       setIsLoading(false)
@@ -79,12 +93,21 @@ export default function LoginPage() {
 
     try {
       setIsLoading(true)
+      const cleanEmail = email.trim().toLowerCase()
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
         password,
       })
 
-      if (error) throw error
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          throw new Error('Credenciales incorrectas. Si eres un usuario nuevo o no recuerdas tu clave, haz clic en "¿Olvidaste tu contraseña?" para restablecerla o validarla.')
+        }
+        if (error.message.includes('Email not confirmed')) {
+          throw new Error('Tu correo aún no ha sido confirmado. Puedes restablecer tu contraseña abajo para validar tu cuenta al instante.')
+        }
+        throw error
+      }
 
       toast({
         title: '¡Bienvenido al CBSJC!',
@@ -106,12 +129,11 @@ export default function LoginPage() {
     }
   }
 
-  // Handle Sign Up (Any email)
+  // Handle Sign Up (Server-side auto-confirm for instant access)
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (honeypot) {
-      // Honeypot triggered: simulate processing delay without executing auth
       setIsLoading(true)
       await new Promise((res) => setTimeout(res, 1200))
       setIsLoading(false)
@@ -152,39 +174,133 @@ export default function LoginPage() {
 
     try {
       setIsLoading(true)
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
-        password,
-        options: {
-          data: {
-            full_name: fullName.trim(),
-          },
-        },
+      const cleanEmail = email.trim().toLowerCase()
+
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: fullName.trim(),
+          email: cleanEmail,
+          password,
+        }),
       })
 
-      if (error) throw error
+      const result = await res.json()
 
-      if (data?.session) {
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || 'No fue posible registrar la cuenta.')
+      }
+
+      // Auto sign-in immediately after server auto-confirm
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      })
+
+      if (signInError) {
         toast({
-          title: '¡Cuenta creada exitosamente!',
-          description: 'Accediendo al panel de control...',
+          title: 'Cuenta creada y validada',
+          description: 'Tu cuenta ha sido activada con éxito. Por favor inicia sesión con tu contraseña.',
+          variant: 'success',
+        })
+        setMode('signin')
+      } else {
+        toast({
+          title: '¡Cuenta creada con éxito!',
+          description: 'Accediendo directamente a la plataforma CBSJC...',
           variant: 'success',
         })
         router.push('/dashboard')
         router.refresh()
-      } else {
-        toast({
-          title: 'Cuenta registrada',
-          description: 'Tu cuenta ha sido creada. Ya puedes iniciar sesión.',
-          variant: 'success',
-        })
-        setMode('signin')
       }
     } catch (err) {
       console.error('Sign-up error:', err)
       toast({
         title: 'Error en el registro',
         description: err instanceof Error ? err.message : 'No se pudo crear la cuenta.',
+        variant: 'error',
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Handle Password Reset / Account Validation
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (honeypot) {
+      setIsLoading(true)
+      await new Promise((res) => setTimeout(res, 1200))
+      setIsLoading(false)
+      return
+    }
+
+    if (!email || !email.includes('@')) {
+      toast({
+        title: 'Correo requerido',
+        description: 'Por favor ingresa tu correo electrónico.',
+        variant: 'warning',
+      })
+      return
+    }
+
+    if (!password || password.length < 6) {
+      toast({
+        title: 'Contraseña requerida',
+        description: 'La nueva contraseña debe tener al menos 6 caracteres.',
+        variant: 'warning',
+      })
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      const cleanEmail = email.trim().toLowerCase()
+
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanEmail,
+          newPassword: password,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || 'No se pudo restablecer la contraseña.')
+      }
+
+      // Auto sign-in with new password
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      })
+
+      if (signInError) {
+        toast({
+          title: 'Contraseña actualizada',
+          description: 'Tu contraseña ha sido actualizada y tu cuenta validada. Inicia sesión ahora.',
+          variant: 'success',
+        })
+        setMode('signin')
+      } else {
+        toast({
+          title: '¡Contraseña actualizada!',
+          description: 'Cuenta validada exitosamente. Accediendo al sistema...',
+          variant: 'success',
+        })
+        router.push('/dashboard')
+        router.refresh()
+      }
+    } catch (err) {
+      console.error('Reset password error:', err)
+      toast({
+        title: 'Error al restablecer',
+        description: err instanceof Error ? err.message : 'No fue posible actualizar la contraseña.',
         variant: 'error',
       })
     } finally {
@@ -284,12 +400,14 @@ export default function LoginPage() {
                 </div>
                 <div>
                   <h2 className="text-xl font-black text-[#0E1B4D] tracking-tight">
-                    {mode === 'signin' ? 'Acceso al Sistema' : 'Crear Cuenta Docente'}
+                    {mode === 'signin' && 'Acceso al Sistema'}
+                    {mode === 'signup' && 'Crear Cuenta Docente'}
+                    {mode === 'forgot' && 'Restablecer Contraseña'}
                   </h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {mode === 'signin'
-                      ? 'Ingresa con cualquier correo electrónico y tu contraseña.'
-                      : 'Regístrate con tu correo para comenzar a planear.'}
+                    {mode === 'signin' && 'Ingresa con tu correo y contraseña.'}
+                    {mode === 'signup' && 'Regístrate con tu correo para validación inmediata.'}
+                    {mode === 'forgot' && 'Define una nueva contraseña para ingresar de inmediato.'}
                   </p>
                 </div>
               </div>
@@ -299,7 +417,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setMode('signin')}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-lg transition-all ${
                     mode === 'signin'
                       ? 'bg-white text-[#0E1B4D] shadow-sm'
                       : 'text-slate-500 hover:text-slate-900'
@@ -312,10 +430,9 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => {
                     setMode('signup')
-                    setEmail('')
                     setPassword('')
                   }}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-lg transition-all ${
                     mode === 'signup'
                       ? 'bg-white text-[#0E1B4D] shadow-sm'
                       : 'text-slate-500 hover:text-slate-900'
@@ -324,11 +441,32 @@ export default function LoginPage() {
                   <UserPlus className="h-3.5 w-3.5" />
                   <span>Crear Cuenta</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('forgot')
+                    setPassword('')
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-lg transition-all ${
+                    mode === 'forgot'
+                      ? 'bg-white text-[#0E1B4D] shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  <span>Recuperar</span>
+                </button>
               </div>
 
               {/* Authentication Form */}
               <form
-                onSubmit={mode === 'signin' ? handleSignIn : handleSignUp}
+                onSubmit={
+                  mode === 'signin'
+                    ? handleSignIn
+                    : mode === 'signup'
+                      ? handleSignUp
+                      : handleResetPassword
+                }
                 className="space-y-3.5"
               >
                 {/* Honeypot anti-bot trap */}
@@ -382,14 +520,28 @@ export default function LoginPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                    Contraseña
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      {mode === 'forgot' ? 'Nueva Contraseña' : 'Contraseña'}
+                    </label>
+                    {mode === 'signin' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMode('forgot')
+                          setPassword('')
+                        }}
+                        className="text-[11px] text-[#162874] hover:text-[#D71921] font-semibold transition-colors"
+                      >
+                        ¿Olvidaste tu contraseña?
+                      </button>
+                    )}
+                  </div>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <Input
                       type={showPassword ? 'text' : 'password'}
-                      placeholder="••••••••••••"
+                      placeholder={mode === 'forgot' ? 'Nueva contraseña (mínimo 6 caracteres)' : '••••••••••••'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       disabled={isLoading}
@@ -409,16 +561,16 @@ export default function LoginPage() {
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full h-11 bg-[#D71921] hover:bg-[#B81219] text-white font-bold text-xs rounded-xl shadow-md transition-colors flex items-center justify-center gap-2"
+                  className="w-full h-11 bg-[#D71921] hover:bg-[#B81219] text-white font-bold text-xs rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 mt-2"
                 >
                   {isLoading ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
                       <span>
-                        {mode === 'signin'
-                          ? 'Ingresar al Sistema'
-                          : 'Registrarse y Comenzar'}
+                        {mode === 'signin' && 'Ingresar al Sistema'}
+                        {mode === 'signup' && 'Crear Cuenta y Comenzar'}
+                        {mode === 'forgot' && 'Restablecer y Acceder'}
                       </span>
                       <ArrowRight className="h-4 w-4" />
                     </>
@@ -430,7 +582,7 @@ export default function LoginPage() {
               <div className="pt-3 border-t border-slate-100 space-y-1.5">
                 <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
                   <ShieldCheck className="h-3.5 w-3.5 text-[#D71921] shrink-0" />
-                  <span>Base de datos segura protegida por Row Level Security (RLS)</span>
+                  <span>Cuentas validadas de forma automática e inmediata</span>
                 </div>
                 <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
@@ -447,3 +599,4 @@ export default function LoginPage() {
     </div>
   )
 }
+
