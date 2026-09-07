@@ -201,7 +201,7 @@ Debes producir una redacción EXHAUSTIVA, EXTENSA, PROFUNDA Y SIN RESÚMENES (m�
 REGLA FUNDAMENTAL DE FORMATO:
 - La Sección 0 DEBE SER UNA TABLA MARKDOWN (| Identificación | Detalle |).
 - La Sección 1 DEBE SER UNA TABLA MARKDOWN (| Referente Curricular | Contenido y Articulación Institucional |) con EXACTAMENTE 14 FILAS. DEBES INCLUIR FILAS SEPARADAS PARA 'Competencias Fijas (Plan de Área / SIAP)' Y 'Competencias Electivas (Profundización / Énfasis)'. CADA FILA DEBE TENER ENTRE 10 Y 20 LÍNEAS DE CONTENIDO PEDAGÓGICO COMPLETO. NUNCA USES LISTAS DE PUNTOS EN LUGAR DE LA TABLA.
-- La Sección 2 DEBE COMENZAR OBLIGATORIAMENTE CON LA TABLA DE ARCO PEDAGÓGICO DE 3 COLUMNAS (| Momento / Fase | Enfoque Pedagógico | Semanas, Sesiones y Actividades Detalladas |) estructurando Antes, Durante y Después distribuidas a lo largo de las ${safeSemanasEfectivas}, seguida del desarrollo minucioso de Warm-up, Core Task, Wrap-up, Consignas Docentes y DUA/PIAR para TDAH.
+- La Sección 2 DEBE SER EXCLUSIVAMENTE LA TABLA DE ARCO PEDAGÓGICO DE 3 COLUMNAS (| Momento / Fase | Enfoque Pedagógico | Semanas, Eje Temático, Can-Do Statement, Qué debe ocurrir (Momentos 1, 2 y 3), Consignas Docentes y Ajustes DUA/PIAR |). TODO el contenido exhaustivo y minucioso de cada momento (Eje Temático, Can-Do Statement, Momento 1 Warm-up / Pre-task, Momento 2 Core Task, Momento 3 Wrap-up & Language Focus, Consignas Docentes, y Ajustes DUA & PIAR para TDAH) DEBE ESTAR ESCRITO ESTRICTAMENTE DENTRO DE LAS CELDAS DE LA TABLA (usando <br><br> para separar párrafos dentro de cada celda). NUNCA DEBES GENERAR LISTAS DE PUNTOS, SUBSECCIONES NI ENCABEZADOS (### ANTES...) FUERA DE LA TABLA.
 
 DATOS DE LA SECUENCIA:
 - Docente(s): ${safeDocente}
@@ -253,51 +253,16 @@ GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN (SIN ETIQUETAS HTML NI CÓDIGO BRUTO)
 
 ## 2. ARCO PEDAGÓGICO DE LA SECUENCIA
 
-| Momento / Fase | Enfoque Pedagógico | Semanas, Sesiones y Actividades Detalladas |
+*Toda secuencia recorre el arco institucional: ANTES (conecta y reta), DURANTE (explora, construye y aplica) y DESPUÉS (evidencia, mejora, reflexiona y transfiere). Se planea por semanas (Semana 1, Semana 2…), indicando a qué momento del arco corresponde cada una, y se describe lo que hace el estudiante. Se evalúa en los tres momentos mediante las actividades del plan de evaluación continua (bloque 3); la exploración inicial sigue siendo sin costo en la nota.*
+
+| Momento / Fase | Enfoque Pedagógico | Semanas, Eje Temático, Can-Do Statement, Qué debe ocurrir (Momentos 1, 2 y 3), Consignas Docentes y Ajustes DUA/PIAR |
 |---|---|---|
-| **ANTES** | **Conecta y reta**<br>Activación y encuadre inicial | **Semana 1 - Actividad 1: Activación y planificación (producción inicial + roles):**<br>- El docente retoma la pregunta de sentido y presenta el desafío rector o fenómeno del campus de Tienda Nueva.<br>- Cada estudiante elabora una producción inicial (mapa mental, hipótesis exploratoria) respondiendo a la pregunta de sentido.<br>- El docente publica la rúbrica global del informe final (bloque 5); las actividades están diseñadas para alcanzar el nivel Gold.<br>- Se conforman equipos cooperativos de 3-4 integrantes, se asignan roles y se registran metas en el Tablero de Progreso. |
-| **DURANTE** | **Explora, construye y aplica**<br>Indagación profunda, laboratorios y modelado | **Semana 2 - Actividad 2: Análisis de fuentes y primer borrador:**<br>- El docente proporciona un kit de recursos clave (lecturas, datos, vocabulario bilingüe ACE).<br>- Los equipos analizan las fuentes y elaboran una tabla comparativa.<br>- Protocolo de estaciones de aprendizaje activo y registro de datos.<br>- Redacción de la primera sección del informe o evidencia.<br><br>**Semana 3 - Actividad 3: Investigación específica y sección individual:**<br>- Cada equipo selecciona una variable o caso de profundización.<br>- Cada estudiante redacta su propia sección individual del producto aplicando pensamiento crítico.<br>- Pruebas experimentales y coevaluación intermedia con protocolo Praise & Polish. |
-| **DESPUÉS** | **Consolida, evalúa y proyecta**<br>Cierre, sustentación y transferencia | **Semana 4 - Actividad 4: Informe final, sustentación oral A2 y metacognición:**<br>- Consolidación y entrega de la versión final del producto Capstone.<br>- Sustentación oral bilingüe en inglés A2/B1 ante panel evaluador y pares.<br>- Evaluación sumativa con Rúbrica Menú de Desafíos, coevaluación y autoevaluación reflexiva con Ticket de Salida y cierre en el Tablero de Progreso. |
+| **ANTES** | *Conecta y reta* | **Semanas de este momento: SEMANA 1 (4 Horas).**<br><br>**EJE TEMÁTICO:** (Nombre del eje temático y fundamentos de inicio de la secuencia).<br><br>*• Can-Do Statement: (Declaración en primera persona bilingüe: 'Reconozco... y expreso en inglés... / I can identify... and explain in A2 English...').*<br><br>**QUÉ DEBE OCURRIR (3 MOMENTOS):**<br>1. Warm-up / Pre-task (Duración y descripción): (Activación cognitiva con un fenómeno o reto del campus de Tienda Nueva, rutina de pensamiento visible 'See-Think-Wonder', publicación y explicación de la Rúbrica Menú de Desafíos Bronze-Silver-Gold, y registro de metas en el Tablero de Progreso Anexo A6 en el cuaderno).<br>2. Core Task (Duración y descripción): (Exploración o laboratorio diagnóstico guiado sin costo en la nota, toma de muestras reales en el campus, montaje exploratorio y registro en esquemas/tablas bilingües).<br>3. Wrap-up & Language Focus (Duración y descripción): (Práctica oral guiada con sentence frames en inglés A2, consolidación del núcleo lingüístico ACE y Ticket de Salida individual).<br><br>**CONSIGNAS DOCENTES:** (1) Formular la pregunta provocadora; (2) Modelar el registro de datos; (3) Circular andamiando vocabulario técnico en inglés; (4) Asegurar rotulación técnica clara en los cuadernos.<br><br>*AJUSTES DUA & PIAR (TDAH y estilos diversos): Esquemas de alto contraste con código de color, segmentación en bloques de 15 min, registro fotográfico opcional, rol activo asignado y temporizador visual.* |
+| **DURANTE** | *Explora, construye y aplica* | **Semanas de este momento: SEMANAS 2 y 3 (8 Horas en total distribuida en las semanas efectivas intermedias).**<br><br>**■ SEMANA 2: (Especialización, Indagación y Estaciones de Aprendizaje)**<br>*• Can-Do Statement: (Declaración 'I can...' bilingüe completa).*<br>• Momento 1 (Warm-up): (Activación cognitiva y análisis comparativo).<br>• Momento 2 (Core Task - Fase 1 Capstone): (Trabajo en estaciones rotativas de laboratorio, construcción de la matriz técnica 'Structure - Function' y modelado bilingüe).<br>• Momento 3 (Wrap-up): (Coevaluación intermedia con protocolo Praise & Polish y actualización del Tablero de Progreso).<br>• Consignas Docentes: (Pautas pedagógicas de andamiaje, modelado y pronunciación técnica).<br>*• Ajustes DUA & PIAR: (Organizadores gráficos con iconos cotidianos, pausas activas cerebrales de 2 min y checklist visual).*<br><br>**■ SEMANA 3: (Integración Sistémica y Construcción de la Evidencia Principal)**<br>*• Can-Do Statement: (Declaración 'I can...' bilingüe completa).*<br>• Momento 1 (Warm-up): (Reto interactivo y conexión sistémica con el autocuidado).<br>• Momento 2 (Core Task - Fase 2 Capstone): (Mapeo anatómico/sistémico interactivo, construcción de diagramas de flujo tridimensionales 'From Food to Cell Energy' y matrices técnicas bilingües).<br>• Momento 3 (Wrap-up): (Dinámica de diálogo guiado en inglés y retroalimentación formativa).<br>• Consignas Docentes: (Modelar la jerarquía visual y monitorear el rigor conceptual y lingüístico).<br>*• Ajustes DUA & PIAR: (Exploración táctil/kinestésica, organizadores tipo fill-in-the-blank con banco de palabras y tarjeta de auto-monitoreo).* |
+| **DESPUÉS** | *Evidencia, mejora, reflexiona y transfiere* | **Semanas de este momento: SEMANA 4 (4 Horas en la semana efectiva final).**<br><br>**EJE TEMÁTICO: (Integración Sistémica, Capstone Project y Transferencia Ecológica al PRAE)**<br><br>*• Can-Do Statement: (Declaración 'I can...' bilingüe completa: 'Sintetizo y explico la organización biológica completa a través de mi Capstone...').*<br><br>**QUÉ DEBE OCURRIR (3 MOMENTOS):**<br>1. Warm-up (Duración): (Montaje de stands para la Feria Científica del Observatorio de Biodiversidad y pitch drill de 30 segundos en inglés).<br>2. Core Task - Sustentación Oral y Defensa Capstone (Duración): (Consolidación y entrega de la versión final del producto Capstone, exposiciones orales ante panel de pares y docente usando guion en inglés A2, y coevaluación formativa Praise & Polish).<br>3. Wrap-up & Metacognición (Duración): (Cierre reflexivo frente a la Driving Question, diligenciamiento final del Tablero de Progreso Anexo A6 y entrega de notas con rúbrica permitiendo reentrega para mejorar).<br><br>**CONSIGNAS DOCENTES:** Crear un ambiente seguro para la sustentación oral bilingüe, aplicar la rúbrica institucional (Saber 35%, Hacer 35%, Ser 20%, Convivir 10%) y priorizar sustentación de estudiantes con TDAH en momentos de óptima atención.<br><br>*AJUSTES DUA & PIAR (TDAH): Cue cards bilingües con apoyos visuales, flexibilidad en modalidad de sustentación (individual/parejas/video), intervalos breves de exposición (2-3 min) y felicitación explícita.* |
 
-*(Nota pedagógica: Adapta la distribución de los momentos Antes, Durante y Después a las ${safeSemanasEfectivas} indicadas por el docente).*
+*Subciclos 1 y 2: la secuencia de Preescolar se planea en el Planning Book Preschool (SJB-RGA027), con los cuatro momentos del nivel. Este formato no aplica en esa sede.*
 
-### ANTES: Conecta y Reta (Semana 1)
-- **Eje Temático:** (Nombre del eje temático y fundamentos de inicio).
-- **Can-Do Statement:** (Declaración en primera persona bilingüe: 'Reconozco... y expreso en inglés... / I can identify... and explain in A2 English...').
-- **Momento 1 - Warm-up / Pre-task:** (Descripción completa: Situación retadora o fenómeno observado en el campus de Tienda Nueva, rutina de pensamiento See-Think-Wonder, publicación de la Rúbrica Menú de Desafíos y registro de metas en el Tablero de Progreso Anexo A6 en el cuaderno del estudiante).
-- **Momento 2 - Core Task:** (Indagación diagnóstica guiada sin costo en la nota, toma de muestras, montaje exploratorio y registro en esquemas).
-- **Momento 3 - Wrap-up & Language Focus:** (Práctica oral guiada con sentence frames en inglés, consolidación de vocabulario ACE y Ticket de Salida individual).
-- **Consignas Docentes:** (4 pautas pedagógicas explícitas de mediación y modelado).
-- **Ajustes DUA & PIAR:** (Estrategias concretas de diseño universal y ajustes para estudiantes con TDAH y estilos diversos).
-
-### DURANTE: Aprende, Construye y Aplica (Semanas 2 y 3)
-
-#### ■ SEMANA 2: Profundización Conceptual y Estaciones Prácticas
-- **Eje Temático:** (Especialización, funciones complejas y relación estructura-función).
-- **Can-Do Statement:** (Declaración 'I can...' bilingüe completa).
-- **Momento 1 - Warm-up:** (Activación cognitiva y análisis comparativo).
-- **Momento 2 - Core Task (Fase 1 Capstone):** (Trabajo en estaciones rotativas de laboratorio, modelado guiado, matrices técnicas 'Structure - Function' y registro sistemático).
-- **Momento 3 - Wrap-up:** (Coevaluación intermedia, retroalimentación formativa y actualización del Tablero de Progreso).
-- **Consignas Docentes:** (Pautas pedagógicas de andamiaje).
-- **Ajustes DUA & PIAR:** (Apoyos visuales, temporizadores y roles diferenciados).
-
-#### ■ SEMANA 3: Integración Disciplinar y Desarrollo de la Evidencia Principal
-- **Eje Temático:** (Integración sistémica, flujo de nutrientes y adaptación ecosistémica).
-- **Can-Do Statement:** (Declaración 'I can...' bilingüe completa).
-- **Momento 1 - Warm-up:** (Conexión sistémica y revisión de avances).
-- **Momento 2 - Core Task (Fase 2 Capstone):** (Construcción editorial del producto central, diagramas de flujo tridimensionales, rotulación en inglés A2 y matrices técnicas).
-- **Momento 3 - Wrap-up:** (Revisión de avance por pares y preparación de la sustentación oral).
-- **Consignas Docentes:** (Monitoreo de rigor conceptual y lingüístico).
-- **Ajustes DUA & PIAR:** (Segmentación de tareas y listas de chequeo).
-
-### DESPUÉS: Evidencia, Mejora, Reflexiona y Transfiere (Semana 4)
-- **Eje Temático:** (Divulgación científica, sustentación oral bilingüe y compromiso PRAE).
-- **Can-Do Statement:** (Declaración 'I can...' bilingüe completa).
-- **Momento 1 - Warm-up:** (Montaje de stands para la Feria Científica y pitch drill bilingüe de 30 segundos).
-- **Momento 2 - Core Task (Sustentación Oral y Defensa Capstone):** (Exposiciones orales en stands ante panel docente y pares usando guion en inglés A2, coevaluación Praise & Polish y entrega del producto completo).
-- **Momento 3 - Wrap-up & Metacognición:** (Cierre reflexivo sobre la Driving Question, autoevaluación final en el Tablero de Progreso Anexo A6 y retroalimentación formativa que permite reentrega para mejorar).
-- **Consignas Docentes:** (Evaluación con rúbrica Menú de Desafíos y retroalimentación constructiva).
-- **Ajustes DUA & PIAR:** (Opciones de sustentación asistida y apoyos visuales).
 `
 }
 

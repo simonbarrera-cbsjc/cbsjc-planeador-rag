@@ -156,9 +156,9 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
         if (isTwoCol) {
           colWidths.push(CONTENT_WIDTH * 0.28, CONTENT_WIDTH * 0.72)
         } else if (numCols === 3) {
-          const isMoments = headers.some((h) => /momento|fase/i.test(h)) || rows.some((r) => /ANTES|DURANTE/i.test(r[0]))
+          const isMoments = headers.some((h) => /momento|fase/i.test(h)) || rows.some((r) => /ANTES|DURANTE|DESPU[EÉ]S/i.test(r[0]))
           if (isMoments) {
-            colWidths.push(CONTENT_WIDTH * 0.16, CONTENT_WIDTH * 0.26, CONTENT_WIDTH * 0.58)
+            colWidths.push(CONTENT_WIDTH * 0.16, CONTENT_WIDTH * 0.20, CONTENT_WIDTH * 0.64)
           } else {
             colWidths.push(CONTENT_WIDTH * 0.20, CONTENT_WIDTH * 0.35, CONTENT_WIDTH * 0.45)
           }
