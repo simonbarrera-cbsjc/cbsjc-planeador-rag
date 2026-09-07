@@ -73,8 +73,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const parsed = listQuerySchema.safeParse(rawParams)
   if (!parsed.success) {
+    const errorMsg = parsed.error.issues.map((i) => i.message).join('. ') || 'Parámetros de consulta inválidos.'
     return NextResponse.json(
-      { success: false, error: parsed.error.flatten().fieldErrors },
+      { success: false, error: errorMsg },
       { status: 400 }
     )
   }
@@ -127,8 +128,9 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
   const parsed = deleteQuerySchema.safeParse({ id: searchParams.get('id') })
 
   if (!parsed.success) {
+    const errorMsg = parsed.error.issues.map((i) => i.message).join('. ') || 'ID de documento no válido.'
     return NextResponse.json(
-      { success: false, error: parsed.error.flatten().fieldErrors },
+      { success: false, error: errorMsg },
       { status: 400 }
     )
   }

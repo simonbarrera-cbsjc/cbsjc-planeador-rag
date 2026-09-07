@@ -16,8 +16,8 @@ const getQuerySchema = z.object({
 
 const patchBodySchema = z.object({
   id: z.string().uuid('ID de documento debe ser un UUID válido'),
-  title: z.string().min(1, 'El título no puede estar vacío').max(300, 'El título no puede exceder 300 caracteres').trim().optional(),
-  content: z.string().min(1, 'El contenido no puede estar vacío').max(150000, 'El contenido excede el tamaño máximo permitido').optional(),
+  title: z.string().min(1, 'El título no puede estar vacío').max(500, 'El título no puede exceder 500 caracteres').trim().optional(),
+  content: z.string().min(1, 'El contenido no puede estar vacío').max(10_000_000, 'El contenido excede el tamaño máximo permitido').optional(),
 })
 
 const deleteQuerySchema = z.object({
@@ -50,8 +50,9 @@ export async function GET(request: NextRequest) {
 
     const parsed = getQuerySchema.safeParse({ id: rawId })
     if (!parsed.success) {
+      const errorMsg = parsed.error.issues.map((i) => i.message).join('. ') || 'ID de documento no válido.'
       return NextResponse.json(
-        { success: false, error: parsed.error.flatten().fieldErrors },
+        { success: false, error: errorMsg },
         { status: 400 }
       )
     }
@@ -121,13 +122,14 @@ export async function PATCH(request: NextRequest) {
     try {
       body = await request.json()
     } catch {
-      return NextResponse.json({ success: false, error: 'JSON inválido' }, { status: 400 })
+      return NextResponse.json({ success: false, error: 'Cuerpo de solicitud inválido (JSON no válido).' }, { status: 400 })
     }
 
     const parsed = patchBodySchema.safeParse(body)
     if (!parsed.success) {
+      const errorMsg = parsed.error.issues.map((i) => i.message).join('. ') || 'Datos de modificación incompletos o inválidos.'
       return NextResponse.json(
-        { success: false, error: parsed.error.flatten().fieldErrors },
+        { success: false, error: errorMsg },
         { status: 400 }
       )
     }
@@ -149,7 +151,11 @@ export async function PATCH(request: NextRequest) {
       .single()
 
     if (error || !updated) {
-      return NextResponse.json({ success: false, error: 'Documento no encontrado o error al actualizar' }, { status: 404 })
+      console.error('[PATCH /api/generated-documents] Update error:', error)
+      return NextResponse.json(
+        { success: false, error: error?.message || 'Documento no encontrado o no tienes permisos para modificarlo.' },
+        { status: error ? 500 : 404 }
+      )
     }
 
     const successResponse = NextResponse.json({ success: true, document: updated })
@@ -157,7 +163,7 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     console.error('Error updating document:', error)
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Error desconocido' },
+      { success: false, error: error instanceof Error ? error.message : 'Error desconocido al actualizar' },
       { status: 500 }
     )
   }
@@ -189,8 +195,9 @@ export async function DELETE(request: NextRequest) {
 
     const parsed = deleteQuerySchema.safeParse({ id: rawId })
     if (!parsed.success) {
+      const errorMsg = parsed.error.issues.map((i) => i.message).join('. ') || 'ID de documento no válido.'
       return NextResponse.json(
-        { success: false, error: parsed.error.flatten().fieldErrors },
+        { success: false, error: errorMsg },
         { status: 400 }
       )
     }
@@ -212,7 +219,7 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     console.error('Error deleting generated document:', error)
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Error desconocido' },
+      { success: false, error: error instanceof Error ? error.message : 'Error desconocido al eliminar' },
       { status: 500 }
     )
   }

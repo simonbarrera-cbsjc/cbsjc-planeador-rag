@@ -235,7 +235,14 @@ export default function PreviewPage({ params }: PreviewPageProps) {
           variant: 'success',
         })
       } else {
-        throw new Error(json.error || 'Error al guardar')
+        const errorMsg =
+          typeof json.error === 'string'
+            ? json.error
+            : json.error?.message ||
+              (typeof json.error === 'object'
+                ? Object.values(json.error).flat().join('. ')
+                : 'Error al guardar los cambios en el servidor.')
+        throw new Error(errorMsg)
       }
     } catch (err) {
       toast({

@@ -93,7 +93,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const parsed = exportBodySchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ success: false, error: parsed.error.flatten().fieldErrors }, { status: 400 })
+    const errorMsg = parsed.error.issues.map((i) => i.message).join('. ') || 'Parámetros de exportación inválidos.'
+    return NextResponse.json({ success: false, error: errorMsg }, { status: 400 })
   }
 
   const { documentId, format } = parsed.data

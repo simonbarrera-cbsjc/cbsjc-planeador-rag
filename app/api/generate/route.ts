@@ -108,8 +108,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const parsedFields = generateFormSchema.safeParse(rawFormData)
   if (!parsedFields.success) {
+    const errorMsg = parsedFields.error.issues.map((i) => i.message).join('. ') || 'Campos del formulario incompletos o inválidos.'
     return NextResponse.json(
-      { success: false, error: parsedFields.error.flatten().fieldErrors },
+      { success: false, error: errorMsg },
       { status: 400 }
     )
   }
