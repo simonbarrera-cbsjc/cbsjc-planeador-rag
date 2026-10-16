@@ -50,13 +50,56 @@ export async function middleware(request: NextRequest) {
     })
   }
 
+  const { pathname } = request.nextUrl
+  const isProtected = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  const isAuthRoute = AUTH_ROUTES.some((route) => pathname.startsWith(route))
+
   let supabaseResponse = NextResponse.next({ request })
 
+  // FAST PATH: If the route is neither protected nor auth-related (public pages, assets),
+  // return immediately without querying database/auth.
+  if (!isProtected && !isAuthRoute) {
+    return applySecurityHeaders(supabaseResponse)
+  }
+
+  const allCookies = request.cookies.getAll()
+  const hasAuthCookie = allCookies.some(
+    (c) => c.name.startsWith('sb-') && c.name.includes('auth-token')
+  )
+
+  // FAST PATH: Unauthenticated user accessing a protected route -> redirect to login immediately
+  if (isProtected && !hasAuthCookie) {
+    const loginUrl = request.nextUrl.clone()
+    loginUrl.pathname = '/login'
+    loginUrl.searchParams.set('next', pathname)
+    return applySecurityHeaders(NextResponse.redirect(loginUrl))
+  }
+
+  // FAST PATH: User accessing /login without existing session cookies -> allow immediately
+  if (isAuthRoute && !hasAuthCookie) {
+    return applySecurityHeaders(supabaseResponse)
+  }
+
+  // At this point, the user has auth cookies and is on a protected route or /login.
+  // Validate with strict timeout guards to prevent 504 MIDDLEWARE_INVOCATION_TIMEOUT
   try {
     const supabase = createServerClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
+        global: {
+          fetch: (url: RequestInfo | URL, options?: RequestInit) => {
+            const controller = new AbortController()
+            const timer = setTimeout(() => controller.abort(), 1800)
+            const init = options || {}
+            if (init.signal) {
+              init.signal.addEventListener('abort', () => controller.abort())
+            }
+            return fetch(url, { ...init, signal: controller.signal }).finally(() =>
+              clearTimeout(timer)
+            )
+          },
+        },
         cookies: {
           getAll() {
             return request.cookies.getAll()
@@ -72,19 +115,17 @@ export async function middleware(request: NextRequest) {
       }
     )
 
-    // Safely retrieve user without crashing on unauthenticated/stale cookies
     let user = null
     try {
-      const { data } = await supabase.auth.getUser()
-      user = data?.user || null
+      const userPromise = supabase.auth.getUser()
+      const timeoutPromise = new Promise<{ data: { user: null }; error: Error }>((_, reject) =>
+        setTimeout(() => reject(new Error('Auth verification timeout')), 2000)
+      )
+      const res = await Promise.race([userPromise, timeoutPromise])
+      user = res.data?.user || null
     } catch {
       user = null
     }
-
-    const { pathname } = request.nextUrl
-
-    const isProtected = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
-    const isAuthRoute = AUTH_ROUTES.some((route) => pathname.startsWith(route))
 
     // Redirect unauthenticated users to login
     if (isProtected && !user) {
@@ -101,8 +142,17 @@ export async function middleware(request: NextRequest) {
       dashboardUrl.searchParams.delete('next')
       return applySecurityHeaders(NextResponse.redirect(dashboardUrl))
     }
+
+    // If on /login with invalid/stale/unreachable cookies, clean them up so subsequent requests are fast
+    if (isAuthRoute && !user && hasAuthCookie) {
+      for (const c of allCookies) {
+        if (c.name.startsWith('sb-') && c.name.includes('auth-token')) {
+          supabaseResponse.cookies.delete(c.name)
+        }
+      }
+    }
   } catch (err) {
-    console.error('Middleware error:', err)
+    console.error('Middleware auth check error:', err)
   }
 
   return applySecurityHeaders(supabaseResponse)
