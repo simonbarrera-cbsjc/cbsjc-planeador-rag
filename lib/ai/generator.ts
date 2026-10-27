@@ -67,13 +67,14 @@ export interface GeneratedPlanningOutput {
 
 /**
  * Ordered fallback candidate models with high token output capacity.
+ * Prioritizes high-throughput models with proven uptime and low 503 concurrency contention.
  */
 export const CANDIDATE_MODELS = [
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite-preview',
   'gemini-3.6-flash',
-  'gemini-flash-latest',
-  'gemini-3.1-flash-lite',
   'gemini-3.5-flash',
-  'gemini-3.1-pro-preview',
+  'gemini-3.8-flash',
   'gemini-3.7-flash',
 ] as const
 
@@ -85,6 +86,15 @@ function delay(ms: number): Promise<void> {
 }
 
 function isTransientError(errorMessage: string): boolean {
+  // If the model reached daily quota limit, do NOT retry this model; jump immediately to the next candidate model
+  if (
+    errorMessage.includes('per day limit exceeded') ||
+    errorMessage.includes('RequestsPerDay') ||
+    errorMessage.includes('Please retry in')
+  ) {
+    return false
+  }
+
   return (
     errorMessage.includes('503') ||
     errorMessage.includes('UNAVAILABLE') ||
@@ -128,11 +138,20 @@ function isAuthError(errorMessage: string): boolean {
 /**
  * Executes an LLM generation with fallback through candidate models and automatic retries.
  */
-async function callGenerativeModel(prompt: string, maxOutputTokens = 65536): Promise<string> {
+async function callGenerativeModel(
+  prompt: string,
+  maxOutputTokens = 16384,
+  preferredModel?: string
+): Promise<string> {
   const genAI = getGenAIClient()
   let lastError: Error | null = null
 
-  for (const modelName of CANDIDATE_MODELS) {
+  // Put preferredModel first if specified to balance load across different model queues
+  const models = preferredModel
+    ? [preferredModel, ...CANDIDATE_MODELS.filter((m) => m !== preferredModel)]
+    : [...CANDIDATE_MODELS]
+
+  for (const modelName of models) {
     for (let attempt = 1; attempt <= MAX_RETRIES_PER_MODEL + 1; attempt++) {
       try {
         const model = genAI.getGenerativeModel({
@@ -541,13 +560,19 @@ export async function generatePlanningDocument(
   const stage2Prompt = buildStage2Prompt(params, formattedContext)
   const stage3Prompt = buildStage3Prompt(params, formattedContext)
 
-  console.log('[generator] Launching Multi-Stage Generation in parallel for maximum 18+ page depth...')
+  console.log('[generator] Launching Multi-Stage Generation with distributed models and staggered initiation...')
 
-  // Execute all 3 stages in parallel
+  // Stagger initiation slightly (800ms) across distinct high-capacity models to prevent concurrency collisions
+  const stage1Promise = callGenerativeModel(stage1Prompt, 16384, 'gemini-3.5-flash-lite')
+  await delay(800)
+  const stage2Promise = callGenerativeModel(stage2Prompt, 16384, 'gemini-3.1-flash-lite-preview')
+  await delay(800)
+  const stage3Promise = callGenerativeModel(stage3Prompt, 16384, 'gemini-3.6-flash')
+
   const [stage1Text, stage2Text, stage3Text] = await Promise.all([
-    callGenerativeModel(stage1Prompt, 65536),
-    callGenerativeModel(stage2Prompt, 65536),
-    callGenerativeModel(stage3Prompt, 65536),
+    stage1Promise,
+    stage2Promise,
+    stage3Promise,
   ])
 
   console.log(`[generator] Stage 1 finished: ${stage1Text.length} chars`)
