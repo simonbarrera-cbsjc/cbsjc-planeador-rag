@@ -1,6 +1,30 @@
 import 'server-only'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { Language, Periodo } from '@/types'
+import {
+  GROUNDING_RULES,
+  buildGroundedContext,
+  buildQueryTerms,
+  isQuoteSupported,
+  normalizeForMatch,
+} from './grounding'
+import {
+  type ArcSkeleton,
+  type WeekPlan,
+  buildArcTableMarkdown,
+  buildEvaluationPlanMarkdown,
+  formatWeekCell,
+  normalizeSkeleton,
+  parseEffectiveWeeks,
+} from './arc'
+import {
+  type VerificationIssue,
+  type VerificationReport,
+  flagUnsupportedRows,
+  sectionBody,
+  verifyPlanningBook,
+  weekDepthProblems,
+} from './verifier'
 
 if (typeof window !== 'undefined') {
   throw new Error('lib/ai/generator.ts must only be used on the server.')
@@ -47,6 +71,7 @@ export interface GeneratePlanningParams {
 
 export interface GeneratedPlanningOutput {
   planningBookMarkdown: string
+  verification: VerificationReport
   rubricsMarkdown: string
   cibercolegiosSnippet: string
   excelSpec: {
@@ -136,13 +161,48 @@ function isAuthError(errorMessage: string): boolean {
 }
 
 /**
- * Executes an LLM generation with fallback through candidate models and automatic retries.
+ * Low-level model caller: fallback chain, retries, JSON mode, per-call timeout, truncation detection.
+ * A module-level semaphore caps concurrent Gemini calls to avoid 503 "high demand" bursts.
  */
-async function callGenerativeModel(
-  prompt: string,
-  maxOutputTokens = 16384,
+interface ModelCallOptions {
+  maxOutputTokens?: number
+  temperature?: number
   preferredModel?: string
-): Promise<string> {
+  json?: boolean
+  deadline?: number
+}
+
+interface ModelCallResult {
+  text: string
+  model: string
+  truncated: boolean
+}
+
+const MAX_CONCURRENT_CALLS = 4
+const PER_CALL_TIMEOUT_MS = 100_000
+let activeCalls = 0
+const slotWaiters: Array<() => void> = []
+
+async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (activeCalls >= MAX_CONCURRENT_CALLS) {
+    await new Promise<void>((resolve) => slotWaiters.push(resolve))
+  }
+  activeCalls++
+  try {
+    return await fn()
+  } finally {
+    activeCalls--
+    const next = slotWaiters.shift()
+    if (next) next()
+  }
+}
+
+function isTimeoutError(errorMessage: string): boolean {
+  return /aborted|AbortError|timeout|timed out/i.test(errorMessage)
+}
+
+async function callModelDetailed(prompt: string, opts: ModelCallOptions = {}): Promise<ModelCallResult> {
+  const { maxOutputTokens = 16384, temperature = 0.25, preferredModel, json = false, deadline } = opts
   const genAI = getGenAIClient()
   let lastError: Error | null = null
 
@@ -151,52 +211,63 @@ async function callGenerativeModel(
     ? [preferredModel, ...CANDIDATE_MODELS.filter((m) => m !== preferredModel)]
     : [...CANDIDATE_MODELS]
 
-  for (const modelName of models) {
-    for (let attempt = 1; attempt <= MAX_RETRIES_PER_MODEL + 1; attempt++) {
-      try {
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          generationConfig: {
-            temperature: 0.35,
-            topP: 0.95,
-            maxOutputTokens,
-          },
-        })
-
-        const result = await model.generateContent(prompt)
-        const response = await result.response
-        const text = response.text()
-
-        if (text && text.trim().length > 0) {
-          return text.trim()
+  return withSlot(async () => {
+    for (const modelName of models) {
+      for (let attempt = 1; attempt <= MAX_RETRIES_PER_MODEL + 1; attempt++) {
+        const remaining = deadline ? deadline - Date.now() : Infinity
+        if (remaining < 8_000) {
+          throw new Error('Se agotó el tiempo máximo de generación. Por favor intenta de nuevo en unos minutos.')
         }
-        throw new Error('Respuesta de generación vacía')
-      } catch (err: unknown) {
-        const rawMessage = err instanceof Error ? err.message : String(err)
-        lastError = err instanceof Error ? err : new Error(rawMessage)
+        try {
+          const model = genAI.getGenerativeModel(
+            {
+              model: modelName,
+              generationConfig: {
+                temperature,
+                topP: 0.95,
+                maxOutputTokens,
+                ...(json ? { responseMimeType: 'application/json' } : {}),
+              },
+            },
+            { timeout: Math.min(PER_CALL_TIMEOUT_MS, remaining - 2_000) }
+          )
 
-        console.warn(`[generator] Model ${modelName} attempt ${attempt} failed: ${rawMessage}`)
+          const result = await model.generateContent(prompt)
+          const response = await result.response
+          const text = response.text()
+          const finishReason = String(response.candidates?.[0]?.finishReason || '')
 
-        if (isAuthError(rawMessage)) {
-          throw new Error(`Error de autenticación con Google Gemini: ${rawMessage}`)
+          if (text && text.trim().length > 0) {
+            return { text: text.trim(), model: modelName, truncated: finishReason === 'MAX_TOKENS' }
+          }
+          throw new Error('Respuesta de generación vacía')
+        } catch (err: unknown) {
+          const rawMessage = err instanceof Error ? err.message : String(err)
+          lastError = err instanceof Error ? err : new Error(rawMessage)
+
+          console.warn(`[generator] Model ${modelName} attempt ${attempt} failed: ${rawMessage.slice(0, 200)}`)
+
+          if (isAuthError(rawMessage)) {
+            throw new Error(`Error de autenticación con Google Gemini: ${rawMessage}`)
+          }
+
+          if (isNotFoundError(rawMessage) || isTimeoutError(rawMessage)) {
+            break // switch to next model immediately
+          }
+
+          if (isTransientError(rawMessage) && attempt <= MAX_RETRIES_PER_MODEL) {
+            const backoffDelay = BASE_RETRY_DELAY_MS * attempt + Math.floor(Math.random() * 500)
+            await delay(backoffDelay)
+            continue
+          }
+
+          break
         }
-
-        if (isNotFoundError(rawMessage)) {
-          break // switch to next model immediately
-        }
-
-        if (isTransientError(rawMessage) && attempt <= MAX_RETRIES_PER_MODEL) {
-          const backoffDelay = BASE_RETRY_DELAY_MS * attempt + Math.floor(Math.random() * 500)
-          await delay(backoffDelay)
-          continue
-        }
-
-        break
       }
     }
-  }
 
-  throw new Error(`Error generando contenido curricular con Gemini. Último error: ${lastError?.message || 'Sin respuesta'}`)
+    throw new Error(`Error generando contenido curricular con Gemini. Último error: ${lastError?.message || 'Sin respuesta'}`)
+  })
 }
 
 /**
@@ -215,22 +286,14 @@ function buildStage1Prompt(params: GeneratePlanningParams, formattedContext: str
 
   return `Eres el Diseñador Curricular y Asistente Pedagógico Oficial del Colegio Bilingüe San José Campestre (CBSJC).
 Tu misión es generar la **ETAPA 1** de la Planeación Curricular Maestra bajo el formato oficial **SJB-RGA006 Planning Book**.
-Debes producir una redacción EXHAUSTIVA, EXTENSA, PROFUNDA Y SIN RESÚMENES (mínimo 20.000 a 28.000 caracteres solo para esta etapa).
+Debes producir una redacción EXHAUSTIVA, EXTENSA, PROFUNDA Y SIN RESÚMENES (mínimo 12.000 a 18.000 caracteres solo para esta etapa).
 
 REGLAS FUNDAMENTALES DE FORMATO Y PROFUNDIDAD PEDAGÓGICA:
 1. La Sección 0 DEBE SER UNA TABLA MARKDOWN (| Identificación | Detalle |).
 2. La Sección 1 DEBE SER UNA TABLA MARKDOWN (| Referente Curricular | Contenido y Articulación Institucional |) con EXACTAMENTE 14 FILAS. DEBES INCLUIR FILAS SEPARADAS PARA 'Competencias Fijas (Plan de Área / SIAP)' Y 'Competencias Electivas (Profundización / Énfasis)'. CADA FILA DEBE TENER ENTRE 10 Y 20 LÍNEAS DE CONTENIDO PEDAGÓGICO COMPLETO. NUNCA USES LISTAS DE PUNTOS EN LUGAR DE LA TABLA.
-3. La Sección 2 DEBE SER EXCLUSIVAMENTE LA TABLA DE ARCO PEDAGÓGICO DE 3 COLUMNAS (| Momento / Fase | Enfoque Pedagógico | Semanas, Eje Temático, Can-Do Statement, Qué debe ocurrir (Momentos 1, 2 y 3), Consignas Docentes y Ajustes DUA/PIAR |).
-   IMPORTANTE: TODO el contenido exhaustivo, minucioso y sesión por sesión de cada momento DEBE ESTAR ESCRITO ESTRICTAMENTE DENTRO DE LAS CELDAS DE LA TABLA (usando <br><br> para separar párrafos dentro de cada celda). NUNCA DEBES GENERAR LISTAS DE PUNTOS, SUBSECCIONES NI ENCABEZADOS (### ANTES...) FUERA DE LA TABLA.
-4. EXIGENCIA DE MÁXIMA PROFUNDIDAD PEDAGÓGICA EN LA SECCIÓN 2 (ARCO PEDAGÓGICO):
-   - Cada fase (ANTES, DURANTE desglosado SEMANA A SEMANA para cada una de las semanas efectivas, y DESPUÉS) DEBE contener obligatoriamente:
-     a) Desglose exacto de duración en minutos (ej. Warm-up 20 min, Core Task 50 min, Wrap-up 20 min en bloques de 90 min).
-     b) Nombre explícito de la Rutina de Pensamiento Visible de Harvard (ej. *See-Think-Wonder / Veo-Pienso-Me Pregunto*, *3-2-1 Bridge*, *Claim-Support-Question*, *Parts-Purposes-Complexities*, *Connect-Extend-Challenge*, *Zoom In*, *I Used to Think... Now I Think...*) y protocolo exacto de registro en el cuaderno.
-     c) Tareas centrales (Core Tasks) explicadas paso a paso con roles de aprendizaje cooperativo (*Líder Científico/de Equipo*, *Registrador ACE*, *Gestor de Materiales*, *Diseñador de Datos / Vocero*) y productos intermedios tangibles.
-     d) Sentence frames literales en inglés A2/B1 para producción oral y escrita en cada semana.
-     e) Ticket de Salida (*Exit Ticket*) con preguntas de verificación conceptual concretas.
-     f) Mínimo 4 Consignas Docentes explícitas y numeradas de mediación pedagógica y andamiaje.
-     g) Ajustes DUA & PIAR específicos y multinivel para estudiantes con TDAH y estilos diversos (esquemas de alto contraste con código de color, temporizadores visuales de 15 min, pausas cerebrales activas, organizadores con bancos de palabras y modalidades alternativas de respuesta).
+3. TERMINA inmediatamente después de la tabla de la Sección 1. NO generes la Sección 2 ni ninguna sección posterior (se generan por separado).
+
+${GROUNDING_RULES}
 
 DATOS DE LA SECUENCIA:
 - Docente(s): ${safeDocente}
@@ -280,25 +343,15 @@ GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN (SIN ETIQUETAS HTML NI CÓDIGO BRUTO)
 | **Proyecto integrador al que aporta** | (Articulación exhaustiva con el Proyecto Transversal PRAE Institucional SJB-PGA012 'Biodiversidad en Tienda Nueva: conocer para conservar' y aporte concreto de la secuencia). |
 | **Número de semanas e intervalo de fechas** | ${safeSemanas} (${safeSemanasEfectivas} de docencia directa) |
 
-## 2. ARCO PEDAGÓGICO DE LA SECUENCIA
-
-*Toda secuencia recorre el arco institucional: ANTES (conecta y reta), DURANTE (explora, construye y aplica) y DESPUÉS (evidencia, mejora, reflexiona y transfiere). Se planea por semanas (Semana 1, Semana 2…), indicando a qué momento del arco corresponde cada una, y se describe lo que hace el estudiante. Se evalúa en los tres momentos mediante las actividades del plan de evaluación continua (bloque 3); la exploración inicial sigue siendo sin costo en la nota.*
-
-| Momento / Fase | Enfoque Pedagógico | Semanas, Eje Temático, Can-Do Statement, Qué debe ocurrir (Momentos 1, 2 y 3), Consignas Docentes y Ajustes DUA/PIAR |
-|---|---|---|
-| **ANTES** | *Conecta y reta* | **Semanas de este momento: SEMANA 1 (4 Horas / Bloques de 90 min).**<br><br>**EJE TEMÁTICO:** (Nombre del eje temático y fundamentos de inicio de la secuencia contextualizados en el campus de Tienda Nueva).<br><br>*• Can-Do Statement: (Declaración en primera persona bilingüe: 'Reconozco... y expreso en inglés... / I can identify... and explain in A2 English...').*<br><br>**QUÉ DEBE OCURRIR (3 MOMENTOS ESTRUCTURADOS):**<br>1. Warm-up / Pre-task (20-25 min): Activación cognitiva mediante un fenómeno provocador del campus o contexto real. Implementación formal de la Rutina de Pensamiento Visible de Harvard 'See-Think-Wonder' (Veo-Pienso-Me Pregunto) con protocolo de registro en el cuaderno, discusión en parejas 'Think-Pair-Share', presentación de la Rúbrica Menú de Desafíos (Bronze, Silver, Gold), y diligenciamiento de metas en el Tablero de Progreso Anexo A6.<br>2. Core Task (45-50 min): Exploración o laboratorio diagnóstico guiado sin costo en la nota (low-stakes exploration). Recolección de evidencias empíricas/muestras en el campus, conformación de equipos cooperativos con roles explícitos (Líder Científico, Registrador ACE, Gestor de Materiales, Diseñador de Datos), montaje exploratorio e inicio del registro en esquemas/tablas bilingües comparativas.<br>3. Wrap-up & Language Focus (20-25 min): Práctica oral guiada con sentence frames en inglés A2 ('When I observe [X], I notice [Y] because...', 'The main difference is...'), consolidación del vocabulario del núcleo lingüístico ACE, y diligenciamiento del Ticket de Salida individual con 2 preguntas de verificación conceptual rápida.<br><br>**CONSIGNAS DOCENTES:** (1) Formular la pregunta provocadora y mediar la rutina de pensamiento; (2) Modelar el registro de datos y rotulación técnica; (3) Circular andamiando vocabulario técnico y pronunciación en inglés; (4) Validar el Tablero de Progreso individual sin calificar numéricamente la exploración inicial.<br><br>*AJUSTES DUA & PIAR (TDAH y estilos diversos): Esquemas visuales de alto contraste con código de color, fragmentación de instrucciones en bloques de 15 min con temporizador visual visible (Time Timer), checklist ilustrado paso a paso, rol activo asignado y opción de registro fotográfico/digital.* |
-| **DURANTE** | *Explora, construye y aplica* | **Semanas de este momento: SEMANAS INTERMEDIAS (8 a 12 Horas distribuidas en las semanas efectivas intermedias).**<br><br>**■ SEMANA 2: (Especialización, Indagación y Estaciones de Aprendizaje)**<br>*• Can-Do Statement: (Declaración 'I can...' bilingüe completa para esta semana).*<br>• Momento 1 (Warm-up - 20-25 min): Activación cognitiva con la rutina de pensamiento visible 'Claim-Support-Question' o 'Connect-Extend-Challenge', análisis visual comparativo y reto contextualizado.<br>• Momento 2 (Core Task - Fase 1 Capstone - 45-50 min): Trabajo en estaciones rotativas de laboratorio o equipos cooperativos con roles asignados, construcción de la matriz técnica 'Structure - Function' y modelado bilingüe con evidencias empíricas.<br>• Momento 3 (Wrap-up - 20-25 min): Práctica oral estructurada ('The structure of [X] allows it to [Y] because...'), coevaluación intermedia con protocolo 'Praise & Polish' (1 elogio técnico + 1 sugerencia de mejora), actualización del Tablero de Progreso y Ticket de Salida.<br>• Consignas Docentes: (1) Enfatizar la relación morfología-función; (2) Guiar la pronunciación de términos técnicos; (3) Monitorear el trabajo cooperativo; (4) Recordar que la reentrega formativa mejora el aprendizaje sin castigo.<br>*• Ajustes DUA & PIAR: Organizadores gráficos con apoyos visuales/iconos, pausas activas cerebrales de 2 min y checklist visual de tareas.*<br><br>**■ SEMANA 3: (Integración Sistémica y Construcción de la Evidencia Principal)**<br>*• Can-Do Statement: (Declaración 'I can...' bilingüe completa para esta semana).*<br>• Momento 1 (Warm-up - 20-25 min): Reto interactivo y conexión sistémica con el autocuidado. Rutina de pensamiento visible 'Parts-Purposes-Complexities' o 'Zoom In'.<br>• Momento 2 (Core Task - Fase 2 Capstone - 45-50 min): Mapeo interactivo, construcción de diagramas de flujo tridimensionales 'From Food to Cell Energy' y matrices técnicas bilingües de integración.<br>• Momento 3 (Wrap-up - 20-25 min): Dinámica 'Dialogue Wheel' en inglés A2, corrección de errores conceptuales en plenaria y Ticket de Salida de síntesis.<br>• Consignas Docentes: (1) Modelar la jerarquía visual de los niveles biológicos/conceptuales; (2) Vincular los conceptos con hábitos diarios de salud; (3) Supervisar el rigor técnico de la evidencia; (4) Andamiar la producción escrita en inglés.<br>*• Ajustes DUA & PIAR: Exploración táctil/kinestésica con modelos 3D, organizadores tipo fill-in-the-blank con banco de palabras y tarjeta de auto-monitoreo de concentración.* |
-| **DESPUÉS** | *Evidencia, mejora, reflexiona y transfiere* | **Semanas de este momento: SEMANA FINAL (4 Horas en la semana efectiva final).**<br><br>**EJE TEMÁTICO: (Integración Sistémica, Capstone Project y Transferencia Ecológica/Social al PRAE)**<br><br>*• Can-Do Statement: (Declaración 'I can...' bilingüe completa: 'Sintetizo y explico la organización biológica/disciplinar completa a través de mi Capstone...').*<br><br>**QUÉ DEBE OCURRIR (3 MOMENTOS ESTRUCTURADOS):**<br>1. Warm-up (20-25 min): Montaje de stands para la Feria Científica / Exposición del Observatorio de Biodiversidad, pitch drill de 30-60 segundos en parejas en inglés, y verificación final con la lista de chequeo de la Rúbrica Menú de Desafíos.<br>2. Core Task - Sustentación Oral y Defensa Capstone (45-50 min): Consolidación y entrega del producto Capstone final, exposiciones orales ante panel evaluador (docente y pares) usando el guion en inglés A2 estructurado en 5 pasos (Apertura, Nivel Micro, Nivel Macro, Compromiso PRAE y Defensa), y coevaluación formativa 'Praise & Polish'.<br>3. Wrap-up & Metacognición (20-25 min): Cierre reflexivo frente a la Driving Question, rutina de pensamiento visible 'I Used to Think... Now I Think...' (Solía pensar... Ahora pienso...), diligenciamiento final del Tablero de Progreso Anexo A6 con autoevaluación, y entrega de valoraciones con rúbrica permitiendo reentrega para mejorar.<br><br>**CONSIGNAS DOCENTES:** (1) Crear un ambiente de confianza y seguridad psicológica para la sustentación oral bilingüe; (2) Aplicar la rúbrica institucional (Saber 35%, Hacer 35%, Ser 20%, Convivir 10%); (3) Priorizar turnos de sustentación de estudiantes con TDAH en momentos de óptima atención; (4) Guiar la retroalimentación constructiva y el cierre del ciclo pedagógico.<br><br>*AJUSTES DUA & PIAR (TDAH y estilos diversos): Cue cards bilingües con apoyos visuales y palabras clave, flexibilidad en modalidad de sustentación (individual/parejas/video), intervalos breves de exposición (2-3 min) y felicitación explícita.* |
-
-*Subciclos 1 y 2: la secuencia de Preescolar se planea en el Planning Book Preschool (SJB-RGA027), con los cuatro momentos del nivel. Este formato no aplica en esa sede.*
-
+(FIN DEL BLOQUE. Detente aquí: no escribas la Sección 2 ni ninguna otra sección.)
 `
 }
 
 /**
- * Stage 2 Prompt: Plan de Evaluación Continua, Pilares, Rúbrica Menú de Desafíos, Cibercolegios y Firmas
+ * Stage 2 Prompt: Pilares, Rúbrica Menú de Desafíos, Cibercolegios y Firmas.
+ * (Section 3 — Plan de Evaluación Continua — is computed by code in lib/ai/arc.ts so percentages add up exactly.)
  */
-function buildStage2Prompt(params: GeneratePlanningParams, formattedContext: string): string {
+function buildStage2Prompt(params: GeneratePlanningParams, formattedContext: string, sk: ArcSkeleton): string {
   const { docente, area, grado, periodo, semanas, semanasEfectivas, tema } = params
   const safeDocente = sanitizeInputText(docente, 200)
   const safeArea = sanitizeInputText(area, 200)
@@ -307,26 +360,26 @@ function buildStage2Prompt(params: GeneratePlanningParams, formattedContext: str
   const safeSemanas = sanitizeInputText(semanas || '4 semanas', 150)
   const safeSemanasEfectivas = sanitizeInputText(semanasEfectivas || '4 semanas efectivas de clase directa', 150)
   const safeTema = sanitizeInputText(tema, 300)
+  const w = sk.pesos
+  const arcSummary = sk.semanas
+    .map((s) => `- Semana ${s.n} (${s.momento}): ${s.eje_tematico}. Producto: ${s.producto_semana || 'por definir'}. Actividad evaluativa: ${s.actividad_evaluativa}.`)
+    .join('\n')
 
   return `Eres el Diseñador Curricular y Asistente Pedagógico Oficial del Colegio Bilingüe San José Campestre (CBSJC).
 Tu misión es generar la **ETAPA 2** de la Planeación Curricular Maestra bajo el formato oficial **SJB-RGA006 Planning Book**.
 Debes producir una redacción EXHAUSTIVA, EXTENSA, PROFUNDA Y EN FORMATO DE TABLAS MARKDOWN ESTRICTAS (mínimo 12.000 a 18.000 caracteres).
 
+${GROUNDING_RULES}
+
 REGLAS DE FORMATO Y EVALUACIÓN OBLIGATORIAS:
-1. La Sección 3 DEBE SER UNA TABLA DE 5 COLUMNAS (| Actividad evaluativa | Semana · momento | Pilar(es) que valora | % dentro del pilar | Rúbrica específica (síntesis coherente con la global) |).
-   IMPORTANTE - CALIBRACIÓN MATEMÁTICA SEGÚN SEMANAS EFECTIVAS:
-   - La planeación cuenta con **${safeSemanasEfectivas}** dentro de un marco de ${safeSemanas}.
-   - Debes distribuir las actividades evaluativas exactamente entre las **${safeSemanasEfectivas}** de clase.
-   - En la columna '% DENTRO DEL PILAR', asigna micro-porcentajes pequeños y ponderados por cada actividad (ej. SABER 2% a 5%, SABER HACER 4% a 6%, SABER SER 1% a 3%, SABER CONVIVIR 1% a 2%).
-   - NUNCA coloques el 25% o 35% total en una sola actividad.
-   - La sumatoria de los micro-porcentajes evaluados a lo largo de las semanas efectivas DEBE SUMAR CON EXACTITUD MATEMÁTICA el porcentaje total acumulado asignado a la secuencia en el periodo lectivo (ej. SABER 15% a 35%, SABER HACER 17.5% a 35%, SABER SER 8% a 20%, SABER CONVIVIR 5% a 10%).
-   - Incluye OBLIGATORIAMENTE al pie de la tabla la nota de verificación matemática institucional desglosando la suma de las semanas efectivas.
+1. EMPIEZA DIRECTAMENTE con el encabezado "## 4. PILARES Y COMPETENCIAS INSTITUCIONALES EN ESTA SECUENCIA". No escribas introducciones. NO generes la Sección 3 (ya existe) ni las Secciones 0, 1, 2 u 8.
 2. La Sección 4 DEBE SER UNA TABLA DE 3 COLUMNAS (| Pilar Institucional | Competencia(s) Evaluada(s) | Manifestación en la Evidencia Principal |).
-   IMPORTANTE: EN LA COLUMNA 'Competencia(s) Evaluada(s)' PUEDES Y DEBES INCLUIR MÁS DE UNA COMPETENCIA POR PILAR (ej. 'Competencia histórica y ciudadana (común) + Competencia lectora y crítica (común)' o 'Uso comprensivo del conocimiento + Explicación de fenómenos') para dar total flexibilidad al docente.
-3. La Sección 5 DEBE SER UNA TABLA DE 5 COLUMNAS (| Pilar · Competencia | Sin categoría (1.0 – 3.9) | Bronze (4.0 – 4.5) Esperado | Silver (4.6 – 4.7) Profundización | Gold (4.8 – 5.0) Excelencia |) con DESCRIPTORES ANALÍTICOS DE 6 A 10 LÍNEAS POR CELDA.
-4. La Sección 6 DEBE SER EL BLOQUE PARA CIBERCOLEGIOS.
+   IMPORTANTE: EN LA COLUMNA 'Competencia(s) Evaluada(s)' PUEDES Y DEBES INCLUIR MÁS DE UNA COMPETENCIA POR PILAR, tomadas de las competencias fijas y electivas del contexto, para dar total flexibilidad al docente.
+3. La Sección 5 DEBE SER UNA TABLA DE 5 COLUMNAS (| Pilar · Competencia | Sin categoría (1.0 – 3.9) | Bronze (4.0 – 4.5) Esperado | Silver (4.6 – 4.7) Profundización | Gold (4.8 – 5.0) Excelencia |) con DESCRIPTORES ANALÍTICOS DE 6 A 10 LÍNEAS POR CELDA, específicos del área y del tema (no genéricos).
+4. La Sección 6 DEBE SER EL BLOQUE PARA CIBERCOLEGIOS (bloque de código \`\`\`text).
 5. La Sección 7 DEBE SER LA BITÁCORA (TABLA 2 COLUMNAS) Y LA TABLA DE 3 FIRMAS (| ELABORÓ | REVISÓ | APROBÓ |).
-6. NO INCLUYAS ETIQUETAS HTML CRUDAS (<strong class="...">, </span>, etc.). USA EXCLUSIVAMENTE MARKDOWN LIMPIO (**negrilla**, *cursiva*).
+6. NO INCLUYAS ETIQUETAS HTML CRUDAS (<strong class="...">, </span>, etc.) salvo <br> dentro de celdas. USA EXCLUSIVAMENTE MARKDOWN LIMPIO (**negrilla**, *cursiva*).
+7. Los pesos de los pilares en el período YA ESTÁN DEFINIDOS: SABER ${w.SABER}%, SABER HACER ${w['SABER HACER']}%, SABER SER ${w['SABER SER']}%, SABER CONVIVIR ${w['SABER CONVIVIR']}%. Úsalos tal cual; no los modifiques.
 
 DATOS DE LA SECUENCIA:
 - Docente(s): ${safeDocente}
@@ -337,50 +390,46 @@ DATOS DE LA SECUENCIA:
 - Semanas Efectivas de Clase: ${safeSemanasEfectivas}
 - Tema: ${safeTema}
 
+ARCO PEDAGÓGICO YA DEFINIDO (para que la evidencia y las rúbricas sean coherentes con él):
+${arcSummary}
+
+<contexto_curricular>
+${formattedContext || 'Utiliza los referentes oficiales del MEN y lineamientos del Colegio Bilingüe San José Campestre.'}
+</contexto_curricular>
+
 GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN:
-
-## 3. PLAN DE EVALUACIÓN CONTINUA DE LA SECUENCIA
-
-| Actividad evaluativa | Semana · momento | Pilar(es) que valora | % dentro del pilar | Rúbrica específica (síntesis coherente con la global) |
-|---|---|---|---|---|
-| **Actividad 1: Activación y planificación (producción inicial + roles)** | Semana 1 - ANTES | SABER · SABER SER · SABER CONVIVIR | SABER: 3%<br>SABER SER: 2%<br>SABER CONVIVIR: 1% | Rúbrica de activación: organización de roles, preguntas iniciales, mapa mental de ideas previas y compromiso del equipo. |
-| **Actividad 2: Análisis de fuentes y primer borrador** | Semana 2 - DURANTE | SABER · SABER HACER · SABER SER · SABER CONVIVIR | SABER: 5%<br>SABER HACER: 6%<br>SABER SER: 2%<br>SABER CONVIVIR: 1.5% | Rúbrica de análisis y borrador: extracción de datos, tabla comparativa, protocolos de laboratorio y calidad de la sección preliminar. |
-| **Actividad 3: Investigación específica y sección individual** | Semana 3 - DURANTE | SABER · SABER HACER · SABER SER · SABER CONVIVIR | SABER: 4%<br>SABER HACER: 6%<br>SABER SER: 1%<br>SABER CONVIVIR: 1.5% | Rúbrica de aporte individual: profundidad del análisis disciplinar, propuesta de solución y rigor de la redacción técnica. |
-| **Actividad 4: Informe final, sustentación oral A2 y metacognición** | Semana 4 - DESPUÉS | SABER · SABER HACER · SABER SER · SABER CONVIVIR | SABER: 3%<br>SABER HACER: 5.5%<br>SABER SER: 3%<br>SABER CONVIVIR: 1% | Rúbrica global (bloque 5) aplicada al informe final; rúbrica de sustentación oral en inglés A2; rúbrica de metacognición. |
-
-*(Verificación matemática institucional: La suma acumulada de las actividades a lo largo de las ${safeSemanasEfectivas} evalúa con rigor el porcentaje asignado a la secuencia en el periodo lectivo: SABER = 3%+5%+4%+3% = 15%; SABER HACER = 6%+6%+5.5% = 17.5%; SABER SER = 2%+2%+1%+3% = 8%; SABER CONVIVIR = 1%+1.5%+1.5%+1% = 5%. Cada semana efectiva evalúa micro-porcentajes ponderados que totalizan la meta del periodo).*
 
 ## 4. PILARES Y COMPETENCIAS INSTITUCIONALES EN ESTA SECUENCIA
 
 | Pilar Institucional | Competencia(s) Evaluada(s) | Manifestación en la Evidencia Principal |
 |---|---|---|
-| **SABER (35%)** | Dimensión Cognitiva y Conceptual: Uso comprensivo del conocimiento disciplinar (común) + Explicación de fenómenos (común) | El estudiante explica con precisión analítica, relaciones causales y vocabulario técnico cómo interactúan los conceptos disciplinares y formula explicaciones fundamentadas en el producto final. |
-| **SABER HACER (35%)** | Dimensión Procedimental y Bilingüe: Pensamiento crítico y resolución de problemas (común) + Indagación e investigación (común) + Comunicación oral en inglés A2 | Modela representaciones técnicas de alta calidad, ejecuta experimentos en estaciones de laboratorio, registra datos empíricos y sustenta oralmente con solvencia en inglés A2/B1. |
-| **SABER SER (20%)** | Dimensión Actitudinal y Autonomía: Autonomía y mentalidad de crecimiento (común) + Ética y autocuidado | Demuestra autorregulación, persistencia frente a desafíos, mejora su desempeño mediante la reentrega formativa y diligencia con honestidad el Tablero de Progreso. |
-| **SABER CONVIVIR (10%)** | Dimensión Relacional y Colaborativa: Colaboración y trabajo en equipo (común) + Conciencia ambiental PRAE | Cumple activamente el rol asignado en el equipo cooperativo, practica la coevaluación respetuosa (Praise & Polish), escucha a sus pares y cuida el entorno natural en Tienda Nueva. |
+| **SABER (${w.SABER}%)** | (Una o más competencias cognitivas del contexto, nombradas literalmente) | (Cómo se manifiesta en la evidencia principal del tema ${safeTema}) |
+| **SABER HACER (${w['SABER HACER']}%)** | (Una o más competencias procedimentales/comunicativas del contexto, incluida la comunicación en inglés A2 si el contexto la contempla) | (Cómo se manifiesta en la evidencia principal) |
+| **SABER SER (${w['SABER SER']}%)** | (Una o más competencias actitudinales del contexto) | (Cómo se manifiesta en la evidencia principal) |
+| **SABER CONVIVIR (${w['SABER CONVIVIR']}%)** | (Una o más competencias relacionales del contexto) | (Cómo se manifiesta en la evidencia principal) |
 
 ## 5. RÚBRICA GLOBAL DE LA EVIDENCIA DE APRENDIZAJE · MENÚ DE DESAFÍOS
 
 | Pilar · Competencia | Sin categoría (1.0 – 3.9) | Bronze (4.0 – 4.5) Esperado | Silver (4.6 – 4.7) Profundización | Gold (4.8 – 5.0) Excelencia |
 |---|---|---|---|---|
-| **SABER (35%)**<br>Dimensión Cognitiva | (Descriptor detallado: Identifica con imprecisiones...) | (Descriptor detallado: Explica con claridad y precisión el aprendizaje esperado completo del grado...) | (Descriptor detallado: Lo anterior, y además profundiza en justificaciones causales complejas...) | (Descriptor detallado: Lo anterior, y además formula hipótesis avanzadas, análisis sistémico y transferencia original al entorno...). |
-| **SABER HACER (35%)**<br>Dimensión Procedimental y Bilingüe | (Descriptor detallado: Construye con inconsistencias...) | (Descriptor detallado: Elabora la evidencia completa con los niveles solicitados, rotulación técnica y expresión oral en inglés A2...) | (Descriptor detallado: Lo anterior, y además modela representaciones de alta calidad y sustenta oralmente con notable fluidez A2...) | (Descriptor detallado: Lo anterior, y además elabora un producto de calidad editorial sobresaliente y defiende con solvencia superior en inglés). |
-| **SABER SER (20%)**<br>Dimensión Actitudinal y Autonomía | (Descriptor detallado: Muestra desinterés o baja persistencia...) | (Descriptor detallado: Diligencia su Tablero de Progreso, cuida los recursos y muestra persistencia para completar tareas a tiempo...) | (Descriptor detallado: Lo anterior, y además demuestra alta autonomía, formula preguntas investigables y mejora con la reentrega...) | (Descriptor detallado: Lo anterior, y además actúa como modelo de mentalidad de crecimiento y liderazgo proactivo). |
-| **SABER CONVIVIR (10%)**<br>Dimensión Relacional y Colaborativa | (Descriptor detallado: Dificultades para asumir un rol cooperativo...) | (Descriptor detallado: Trabaja armónicamente en su equipo cooperativo, cumple su rol y respeta las normas de convivencia...) | (Descriptor detallado: Lo anterior, y además apoya a sus compañeros y aporta soluciones constructivas...) | (Descriptor detallado: Lo anterior, y además lidera la sinergia grupal, fomenta inclusión y promueve activamente el cuidado del entorno escolar). |
+| **SABER (${w.SABER}%)**<br>(competencia) | (Descriptor: logro insuficiente, específico del tema) | (Descriptor: el aprendizaje esperado completo del grado) | (Descriptor: lo anterior y además profundiza) | (Descriptor: lo anterior y además transfiere/crea) |
+| **SABER HACER (${w['SABER HACER']}%)**<br>(competencia) | (…) | (…) | (…) | (…) |
+| **SABER SER (${w['SABER SER']}%)**<br>(competencia) | (…) | (…) | (…) | (…) |
+| **SABER CONVIVIR (${w['SABER CONVIVIR']}%)**<br>(competencia) | (…) | (…) | (…) | (…) |
 
 *Salvaguardas Pedagógicas CBSJC:* El descriptor Bronze es el aprendizaje esperado completo del grado; Silver y Gold exigen profundización y excelencia alcanzable dentro del tiempo de la secuencia. La reentrega formativa siempre mejora el aprendizaje y la valoración según la banda alcanzada.
 
 ## 6. BLOQUE DE TRASLADO A CIBERCOLEGIOS
 \`\`\`text
 NOMBRE (instrumento): ${safeTema} (SJB-RGA006)
-DESCRIPCIÓN: Pregunta de sentido: ${safeTema} | DBA: Oficial del grado | Evidencia principal: Producto Capstone y sustentación oral bilingüe | Competencias por pilar: SABER (35%) - Explicación de fenómenos; SABER HACER (35%) - Indagación y bilingüismo A2; SABER SER (20%) - Autonomía y Tablero de Progreso; SABER CONVIVIR (10%) - Trabajo en equipo y compromiso PRAE | Meta ACE: En nivel A2, describe y compara en inglés | Rúbrica: Menú de Desafíos adjunta en el recurso de la actividad | Bandas de valoración: Sin categoría (1.0 - 3.9) | Bronze (4.0 - 4.5: esperado completo) | Silver (4.6 - 4.7: profundización) | Gold (4.8 - 5.0: excelencia y transferencia).
+DESCRIPCIÓN: Pregunta de sentido: (tomada del contexto) | DBA: (del contexto) | Evidencia principal: (nombre) | Competencias por pilar: SABER (${w.SABER}%) - ...; SABER HACER (${w['SABER HACER']}%) - ...; SABER SER (${w['SABER SER']}%) - ...; SABER CONVIVIR (${w['SABER CONVIVIR']}%) - ... | Rúbrica: Menú de Desafíos adjunta en el recurso de la actividad | Bandas de valoración: Sin categoría (1.0 - 3.9) | Bronze (4.0 - 4.5: esperado completo) | Silver (4.6 - 4.7: profundización) | Gold (4.8 - 5.0: excelencia y transferencia).
 \`\`\`
 
 ## 7. BITÁCORA DE LA SECUENCIA · SE DILIGENCIA AL CIERRE
 
 | Aspecto Reflexivo | Registro del Docente |
 |---|---|
-| **Qué ocurrió frente a lo planeado** | [Espacio reservado para el registro reflexivo del docente al finalizar las 4 semanas: ajustes sobre la marcha, gestión de tiempos y adaptaciones metodológicas]. |
+| **Qué ocurrió frente a lo planeado** | [Espacio reservado para el registro reflexivo del docente al finalizar las ${safeSemanasEfectivas}: ajustes sobre la marcha, gestión de tiempos y adaptaciones metodológicas]. |
 | **Distribución de niveles del grupo** | [Registro cuantitativo institucional: N.° de estudiantes en Sin Categoría / Bronze / Silver / Gold — Sin nombres individuales]. |
 | **Lectura del docente** | [Lectura pedagógica del docente: análisis de logros del grupo, seguimiento a estudiantes con ajustes PIAR/DUA y acuerdos de mejora para la siguiente secuencia]. |
 
@@ -418,6 +467,14 @@ DATOS DE LA SECUENCIA:
 - Grado: ${safeGrado}
 - Período: ${safePeriodo}
 - Tema: ${safeTema}
+
+${GROUNDING_RULES}
+
+Las preguntas de las evaluaciones deben evaluar EXCLUSIVAMENTE contenidos del tema y de los referentes del contexto; toda clave de respuesta debe ser correcta y verificable. Empieza directamente con el encabezado "## 8." sin introducciones.
+
+<contexto_curricular>
+${formattedContext || 'Utiliza únicamente referentes generales del MEN.'}
+</contexto_curricular>
 
 GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN:
 
@@ -543,50 +600,376 @@ GENERA EXACTAMENTE ESTE BLOQUE EN MARKDOWN:
 `
 }
 
+/* ------------------------------------------------------------------------------------------------
+ * Arc planning (skeleton) + per-week deep generation + Section 1 audit
+ * ---------------------------------------------------------------------------------------------- */
+
+const SPREAD_MODELS = [
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite-preview',
+  'gemini-3.5-flash',
+  'gemini-3.6-flash',
+] as const
+
+function pickModel(i: number): string {
+  return SPREAD_MODELS[i % SPREAD_MODELS.length]
+}
+
+function extractJson(text: string): string {
+  const t = text.replace(/```(?:json)?/gi, '').trim()
+  const a = t.indexOf('{')
+  const b = t.lastIndexOf('}')
+  return a >= 0 && b > a ? t.slice(a, b + 1) : t
+}
+
+/** Removes any preamble before the expected first heading and unwraps a full-document code fence. */
+function trimToHeading(text: string, headingRe: RegExp): string {
+  let t = text.trim()
+  if (/^```(?:markdown|md)?\s*\n/i.test(t)) {
+    t = t.replace(/^```(?:markdown|md)?\s*\n/i, '').replace(/\n```\s*$/i, '')
+  }
+  const m = headingRe.exec(t)
+  if (m && m.index > 0) t = t.slice(m.index)
+  return t.trim()
+}
+
+function buildSkeletonPrompt(params: GeneratePlanningParams, formattedContext: string, total: number): string {
+  const safeArea = sanitizeInputText(params.area, 200)
+  const safeGrado = sanitizeInputText(params.grado, 100)
+  const safePeriodo = sanitizeInputText(String(params.periodo), 50)
+  const safeTema = sanitizeInputText(params.tema, 300)
+  const safeSemanas = sanitizeInputText(params.semanas || '4 semanas', 150)
+  const safeInstructions = sanitizeInputText(params.additionalInstructions, 3000)
+
+  return `Eres el Diseñador Curricular del Colegio Bilingüe San José Campestre (CBSJC). Vas a PLANIFICAR (no redactar en detalle) el arco pedagógico ANTES — DURANTE — DESPUÉS de una secuencia didáctica de ${total} semana(s) efectiva(s).
+
+${GROUNDING_RULES}
+
+DATOS:
+- Área: ${safeArea} · Grado: ${safeGrado} · Período: ${safePeriodo}
+- Marco de semanas / horario: ${safeSemanas}
+- Semanas efectivas de clase directa: ${total}
+- Tema / pregunta de sentido: ${safeTema}
+${safeInstructions ? `- Instrucciones del docente: ${safeInstructions}` : ''}
+
+<contexto_curricular>
+${formattedContext || 'Sin documentos: usa únicamente referentes generales del MEN.'}
+</contexto_curricular>
+
+TAREA:
+1. Busca en el contexto los PESOS de los cuatro pilares para el período (SABER, SABER HACER, SABER SER, SABER CONVIVIR). Si aparecen explícitamente y suman 100, devuélvelos en "pesos_pilares". Si NO aparecen, devuelve "pesos_pilares": null (NO los inventes).
+2. Diseña ${total} semanas con progresión lógica: la Semana 1 es ANTES (conecta y reta, exploración sin costo en nota), las intermedias son DURANTE (explora, construye y aplica) y la última es DESPUÉS (evidencia, mejora, reflexiona y transfiere). Cada semana debe AVANZAR un producto/evidencia acumulativa hacia la evidencia principal; no repitas actividades entre semanas.
+3. Cada semana lleva UNA actividad evaluativa concreta, los pilares que valora (al menos uno; en conjunto las semanas deben cubrir los cuatro pilares) y una síntesis de rúbrica de 1-2 frases coherente con el Menú de Desafíos (Bronze/Silver/Gold).
+
+RESPONDE ÚNICAMENTE CON JSON VÁLIDO con esta forma exacta:
+{
+  "pesos_pilares": {"SABER": 35, "SABER HACER": 35, "SABER SER": 20, "SABER CONVIVIR": 10} | null,
+  "semanas": [
+    {
+      "n": 1,
+      "eje_tematico": "…",
+      "can_do": "Declaración en primera persona, bilingüe (español + 'I can…' en inglés A2)",
+      "producto_semana": "evidencia intermedia concreta de esta semana",
+      "actividad_evaluativa": "nombre concreto de la actividad evaluativa",
+      "pilares": ["SABER", "SABER SER"],
+      "rubrica_sintesis": "1-2 frases",
+      "foco_conceptual": ["3 a 5 conceptos clave que se trabajan esta semana"],
+      "rutina_pensamiento": "nombre de una rutina de pensamiento visible de Harvard (p. ej. See-Think-Wonder, 3-2-1 Bridge, Claim-Support-Question, Connect-Extend-Challenge, Parts-Purposes-Complexities, Zoom In, I Used to Think… Now I Think…)"
+    }
+  ]
+}`
+}
+
+function summarizeArc(sk: ArcSkeleton): string {
+  return sk.semanas
+    .map(
+      (s) =>
+        `- Semana ${s.n} (${s.momento}): eje "${s.eje_tematico}" · producto: ${s.producto_semana || 'por definir'} · conceptos: ${s.foco_conceptual.join(', ') || 'por definir'} · rutina: ${s.rutina_pensamiento}`
+    )
+    .join('\n')
+}
+
+function buildWeekPrompt(
+  params: GeneratePlanningParams,
+  formattedContext: string,
+  sk: ArcSkeleton,
+  week: WeekPlan
+): string {
+  const safeArea = sanitizeInputText(params.area, 200)
+  const safeGrado = sanitizeInputText(params.grado, 100)
+  const safePeriodo = sanitizeInputText(String(params.periodo), 50)
+  const safeTema = sanitizeInputText(params.tema, 300)
+  const safeSemanas = sanitizeInputText(params.semanas || '4 semanas (sesiones de 90 min)', 150)
+  const safeInstructions = sanitizeInputText(params.additionalInstructions, 3000)
+  const total = sk.semanas.length
+
+  const momentGuide: Record<string, string> = {
+    ANTES:
+      'ANTES — Conecta y reta. Activación cognitiva con un fenómeno/reto real del contexto escolar, exploración diagnóstica SIN costo en la nota, publicación y explicación de la Rúbrica Menú de Desafíos (Bronze-Silver-Gold) y apertura del Tablero de Progreso (Anexo A6) en el cuaderno.',
+    DURANTE:
+      'DURANTE — Explora, construye y aplica. Trabajo cooperativo con roles, construcción por fases de la evidencia principal, coevaluación formativa con protocolo Praise & Polish (1 elogio técnico + 1 sugerencia) y actualización del Tablero de Progreso.',
+    'DESPUÉS':
+      'DESPUÉS — Evidencia, mejora, reflexiona y transfiere. Ensamble final de la evidencia, sustentación oral bilingüe ante panel de pares y docente, metacognición, reentrega para mejorar y transferencia al proyecto integrador/PRAE si el contexto lo contempla.',
+  }
+
+  return `Eres el Diseñador Curricular del Colegio Bilingüe San José Campestre (CBSJC). Redacta ÚNICAMENTE el desarrollo EXHAUSTIVO de la SEMANA ${week.n} de ${total} del arco pedagógico, sesión por sesión, para que un docente pueda ejecutarlo sin consultar nada más.
+
+${GROUNDING_RULES}
+
+DATOS:
+- Área: ${safeArea} · Grado: ${safeGrado} · Período: ${safePeriodo}
+- Tema / pregunta de sentido: ${safeTema}
+- Marco de semanas y horario (úsalo para repartir los minutos): ${safeSemanas}
+${safeInstructions ? `- Instrucciones del docente (respétalas): ${safeInstructions}` : ''}
+
+ARCO COMPLETO DE LA SECUENCIA (para dar continuidad y NO repetir actividades de otras semanas):
+${summarizeArc(sk)}
+
+ESTA SEMANA — ${momentGuide[week.momento] || week.momento}
+- Eje temático: ${week.eje_tematico}
+- Can-Do base: ${week.can_do || 'redáctalo tú (bilingüe)'}
+- Producto/evidencia de esta semana: ${week.producto_semana || 'defínelo coherente con el arco'}
+- Conceptos a trabajar: ${week.foco_conceptual.join('; ') || 'derívalos del tema y del contexto'}
+- Rutina de pensamiento sugerida: ${week.rutina_pensamiento}
+- Actividad evaluativa vinculada: ${week.actividad_evaluativa} (pilares: ${week.pilares.join(', ')})
+
+<contexto_curricular>
+${formattedContext || 'Sin documentos: usa únicamente referentes generales del MEN.'}
+</contexto_curricular>
+
+FORMATO DE SALIDA (texto plano, SIN markdown, SIN tablas, SIN asteriscos). Cada bloque empieza EXACTAMENTE con su etiqueta en mayúsculas seguida de dos puntos. Escribe todas las etiquetas, en este orden:
+
+EJE TEMÁTICO: …
+CAN-DO STATEMENT: … (español) / I can … (inglés A2)
+RUTINA DE PENSAMIENTO VISIBLE: nombre de la rutina + protocolo exacto de registro en el cuaderno (qué escribe/dibuja el estudiante y en qué orden).
+MOMENTO 1 · WARM-UP / PRE-TASK (xx min): …
+MOMENTO 2 · CORE TASK (xx min): …
+MOMENTO 3 · WRAP-UP & LANGUAGE FOCUS (xx min): …
+SENTENCE FRAMES (ENGLISH A2/B1): …
+TICKET DE SALIDA: …
+EVIDENCIA / PRODUCTO DE LA SEMANA: …
+CONSIGNAS DOCENTES: …
+AJUSTES DUA & PIAR: …
+
+EXIGENCIAS DE PROFUNDIDAD (cumple TODAS; el texto total debe tener entre 5.000 y 9.000 caracteres):
+- Cada MOMENTO indica minutos exactos (los tres suman la duración de una sesión según el horario) y se redacta PASO A PASO con pasos numerados (1., 2., 3., …). Cada paso dice qué hace el docente y qué hace el estudiante.
+- MOMENTO 2 (Core Task) incluye roles de aprendizaje cooperativo (Líder Científico/de Equipo, Registrador ACE, Gestor de Materiales, Diseñador de Datos/Vocero), los materiales concretos y el producto intermedio tangible. Si la semana tiene varias sesiones, desglosa cada sesión ("Sesión 1 …", "Sesión 2 …").
+- SENTENCE FRAMES: mínimo 4 estructuras literales en inglés entre comillas, con el vocabulario disciplinar clave de esta semana y su uso (oral/escrito).
+- TICKET DE SALIDA: mínimo 2 preguntas concretas sobre el contenido de ESTA semana, cada una con la respuesta esperada entre paréntesis.
+- CONSIGNAS DOCENTES: mínimo 5, numeradas (1)…(5), de mediación pedagógica (preguntas provocadoras a formular, errores conceptuales frecuentes a anticipar, cómo andamiar el inglés, cómo retroalimentar).
+- AJUSTES DUA & PIAR: mínimo 5 estrategias concretas y diferenciadas por nivel (apoyo / estándar / desafío) para estudiantes con TDAH y estilos diversos (código de color de alto contraste, temporizador visual de 15 min, pausas activas, banco de palabras, modalidades alternativas de respuesta).
+- Todo debe ser específico del área, grado y tema: nada genérico, nada de otras áreas. No repitas actividades de las otras semanas.
+- No dejes textos entre paréntesis tipo "(Redactar…)". Escribe todo completo.`
+}
+
+async function generateWeekCell(
+  params: GeneratePlanningParams,
+  formattedContext: string,
+  sk: ArcSkeleton,
+  week: WeekPlan,
+  taskIndex: number,
+  deadline: number
+): Promise<{ cell: string; truncated: boolean }> {
+  const basePrompt = buildWeekPrompt(params, formattedContext, sk, week)
+  let feedback = ''
+  let best = { cell: '', truncated: false, problems: ['sin contenido'] as string[] }
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const r = await callModelDetailed(basePrompt + feedback, {
+      maxOutputTokens: 8192,
+      temperature: 0.3,
+      preferredModel: pickModel(taskIndex + attempt),
+      deadline,
+    })
+    const cell = formatWeekCell(r.text)
+    const problems = weekDepthProblems(cell)
+    if (best.cell === '' || problems.length < best.problems.length) {
+      best = { cell, truncated: r.truncated, problems }
+    }
+    if (problems.length === 0) break
+    console.warn(`[generator] Week ${week.n} attempt ${attempt + 1} rejected: ${problems.join('; ')}`)
+    feedback = `\n\nCORRECCIÓN OBLIGATORIA: tu respuesta anterior fue rechazada porque: ${problems.join('; ')}. Reescribe la semana COMPLETA cumpliendo todas las exigencias, con más detalle y respetando exactamente las etiquetas.`
+  }
+  return { cell: best.cell, truncated: best.truncated }
+}
+
+const AUDITED_ROWS = [
+  'competencias fijas',
+  'competencias electivas',
+  'estandar basico',
+  'derecho basico',
+  'evidencias de aprendizaje',
+  'icfes',
+  'pregunta de sentido',
+]
+
 /**
- * Main Generation Orchestrator: Multi-Stage Parallel Execution
+ * Quote-grounded audit of the official data rows in Section 1.
+ * The model must copy a LITERAL fragment of the rector documents for every row; the quote is then verified
+ * programmatically. Rows without a verifiable quote are flagged for the teacher.
+ */
+async function auditSection1(
+  stage1Text: string,
+  groundedContext: string,
+  allContextNorm: string,
+  deadline: number
+): Promise<{ flags: Array<{ rowLabel: string; reason: string }>; checked: number; ok: boolean }> {
+  const rows = sectionBody(stage1Text, 1)
+    .split('\n')
+    .filter((l) => l.trim().startsWith('|') && !/^\|\s*[-:]+/.test(l.trim()))
+    .map((l) => l.split('|').map((c) => c.trim()))
+    .map((cells) => ({ label: (cells[1] || '').replace(/\*/g, ''), content: (cells[2] || '').replace(/<br>/g, ' ') }))
+    .filter((r) => AUDITED_ROWS.some((a) => normalizeForMatch(r.label).includes(a)))
+    .filter((r) => !/NO CONSTA EN LOS DOCUMENTOS/i.test(r.content))
+
+  if (rows.length === 0) return { flags: [], checked: 0, ok: true }
+
+  const prompt = `Eres un AUDITOR de fidelidad documental. Debes verificar si el contenido de cada fila de una planeación está respaldado por los DOCUMENTOS RECTORES.
+
+Para CADA fila:
+- Copia LITERALMENTE (sin modificar ni resumir) un fragmento de 8 a 40 palabras de los documentos que respalde su contenido oficial, en "cita_textual".
+- Si no existe respaldo en los documentos, usa "apoyado": false y "cita_textual": "".
+- NO inventes citas. Una cita falsa es el peor error posible.
+
+FILAS A AUDITAR:
+${rows.map((r, i) => `${i + 1}. [${r.label}] ${r.content.slice(0, 1200)}`).join('\n')}
+
+<documentos_rectores>
+${groundedContext}
+</documentos_rectores>
+
+Responde SOLO con JSON: {"filas":[{"fila":"<etiqueta exacta>","apoyado":true|false,"cita_textual":"…"}]}`
+
+  try {
+    const r = await callModelDetailed(prompt, {
+      json: true,
+      temperature: 0,
+      maxOutputTokens: 4096,
+      preferredModel: pickModel(1),
+      deadline,
+    })
+    const parsed = JSON.parse(extractJson(r.text)) as { filas?: Array<{ fila?: string; apoyado?: boolean; cita_textual?: string }> }
+    const flags: Array<{ rowLabel: string; reason: string }> = []
+    for (const row of rows) {
+      const hit = (parsed.filas || []).find((f) => normalizeForMatch(f.fila || '') === normalizeForMatch(row.label))
+      const supported = !!hit && hit.apoyado === true && isQuoteSupported(hit.cita_textual || '', allContextNorm)
+      if (!supported) {
+        flags.push({
+          rowLabel: row.label,
+          reason: 'este contenido no pudo comprobarse con una cita literal de los documentos cargados; contrástalo con el documento rector antes de usarlo.',
+        })
+      }
+    }
+    return { flags, checked: rows.length, ok: true }
+  } catch (err) {
+    console.warn('[generator] Section 1 audit unavailable:', err instanceof Error ? err.message : err)
+    return { flags: [], checked: 0, ok: false }
+  }
+}
+
+/**
+ * Main Generation Orchestrator.
+ *  1. Plan the arc skeleton (JSON) — one small call.
+ *  2. In parallel (bounded concurrency): Stage 1 (sections 0-1), N week-by-week expansions (section 2),
+ *     Stage 2 (sections 4-7), Stage 3 (annexes).
+ *  3. Section 3 is computed by code (exact percentages); Section 1 is audited with quote-grounding.
+ *  4. Deterministic verification report.
  */
 export async function generatePlanningDocument(
   params: GeneratePlanningParams
 ): Promise<GeneratedPlanningOutput> {
-  const formattedContext = params.contextDocs
-    .map(
-      (doc, i) =>
-        `=== [DOCUMENTO RECTOR / FUENTE ${i + 1}: ${doc.tipo.toUpperCase()} (${doc.filename})] ===\n${sanitizeInputText(doc.content, 12000)}\n`
-    )
-    .join('\n')
+  const startedAt = Date.now()
+  const deadline = startedAt + 270_000
+  const total = parseEffectiveWeeks(params.semanasEfectivas)
 
-  const stage1Prompt = buildStage1Prompt(params, formattedContext)
-  const stage2Prompt = buildStage2Prompt(params, formattedContext)
-  const stage3Prompt = buildStage3Prompt(params, formattedContext)
+  const docs = params.contextDocs.map((d) => ({
+    tipo: d.tipo,
+    filename: d.filename,
+    content: sanitizeInputText(d.content, 400_000),
+  }))
+  const terms = buildQueryTerms([params.tema, params.area, params.grado, `periodo ${params.periodo}`])
+  const ctxFull = buildGroundedContext(docs, 90_000, terms)
+  const ctxMid = buildGroundedContext(docs, 40_000, terms)
+  const ctxWeek = buildGroundedContext(docs, 28_000, terms)
+  const allContextText = docs.map((d) => d.content).join('\n')
+  const allContextNorm = normalizeForMatch(allContextText)
 
-  console.log('[generator] Launching Multi-Stage Generation with distributed models and staggered initiation...')
+  console.log(`[generator] Planning arc skeleton for ${total} effective week(s)...`)
+  let skeleton: ArcSkeleton
+  try {
+    const sr = await callModelDetailed(buildSkeletonPrompt(params, ctxFull, total), {
+      json: true,
+      temperature: 0.2,
+      maxOutputTokens: 8192,
+      preferredModel: pickModel(0),
+      deadline,
+    })
+    skeleton = normalizeSkeleton(JSON.parse(extractJson(sr.text)), total, params.tema)
+  } catch (err) {
+    console.warn('[generator] Skeleton planning failed, using deterministic fallback:', err instanceof Error ? err.message : err)
+    skeleton = normalizeSkeleton({}, total, params.tema)
+  }
+  console.log(`[generator] Skeleton ready in ${Date.now() - startedAt} ms. Launching stages and ${total} week expansions...`)
 
-  // Stagger initiation slightly (800ms) across distinct high-capacity models to prevent concurrency collisions
-  const stage1Promise = callGenerativeModel(stage1Prompt, 16384, 'gemini-3.5-flash-lite')
-  await delay(800)
-  const stage2Promise = callGenerativeModel(stage2Prompt, 16384, 'gemini-3.1-flash-lite-preview')
-  await delay(800)
-  const stage3Promise = callGenerativeModel(stage3Prompt, 16384, 'gemini-3.6-flash')
+  const truncatedStages: string[] = []
 
-  const [stage1Text, stage2Text, stage3Text] = await Promise.all([
-    stage1Promise,
-    stage2Promise,
-    stage3Promise,
-  ])
+  const stage1P = callModelDetailed(buildStage1Prompt(params, ctxFull), {
+    maxOutputTokens: 16384,
+    temperature: 0.2,
+    preferredModel: pickModel(2),
+    deadline,
+  })
+  const weekPs = skeleton.semanas.map((w, i) => generateWeekCell(params, ctxWeek, skeleton, w, i + 3, deadline))
+  const stage2P = callModelDetailed(buildStage2Prompt(params, ctxMid, skeleton), {
+    maxOutputTokens: 16384,
+    temperature: 0.25,
+    preferredModel: pickModel(3),
+    deadline,
+  })
+  const stage3P = callModelDetailed(buildStage3Prompt(params, ctxMid), {
+    maxOutputTokens: 16384,
+    temperature: 0.25,
+    preferredModel: pickModel(0),
+    deadline,
+  })
+  const auditP = stage1P
+    .then((s1) => auditSection1(s1.text, ctxMid, allContextNorm, deadline))
+    .catch(() => ({ flags: [] as Array<{ rowLabel: string; reason: string }>, checked: 0, ok: false }))
 
-  console.log(`[generator] Stage 1 finished: ${stage1Text.length} chars`)
-  console.log(`[generator] Stage 2 finished: ${stage2Text.length} chars`)
-  console.log(`[generator] Stage 3 finished: ${stage3Text.length} chars`)
+  const [s1, weekResults, s2, s3, audit] = await Promise.all([stage1P, Promise.all(weekPs), stage2P, stage3P, auditP])
+
+  if (s1.truncated) truncatedStages.push('Identificación y referentes (Sección 1)')
+  if (s2.truncated) truncatedStages.push('Pilares, rúbrica y cierre (Secciones 4-7)')
+  if (s3.truncated) truncatedStages.push('Anexos evaluativos (Sección 8)')
+  weekResults.forEach((r, i) => {
+    if (r.truncated) truncatedStages.push(`Arco pedagógico · Semana ${i + 1}`)
+  })
+
+  console.log(`[generator] Stage 1: ${s1.text.length} chars · Stage 2: ${s2.text.length} chars · Stage 3: ${s3.text.length} chars`)
+  console.log(`[generator] Weeks: ${weekResults.map((r) => r.cell.length).join(', ')} chars · audit flags: ${audit.flags.length}/${audit.checked}`)
+
+  const weekCells: Record<number, string> = {}
+  weekResults.forEach((r, i) => {
+    weekCells[i + 1] = r.cell
+  })
+
+  const stage1Text = flagUnsupportedRows(trimToHeading(s1.text, /^#\s+Secuencia Did[aá]ctica/m), audit.flags)
+  const section2 = buildArcTableMarkdown(skeleton, weekCells)
+  const section3 = buildEvaluationPlanMarkdown(
+    skeleton,
+    params.semanasEfectivas || `${total} semanas efectivas de clase directa`
+  )
+  const stage2Text = trimToHeading(s2.text, /^##\s*4\./m)
+  const stage3Text = trimToHeading(s3.text, /^##\s*8\./m)
 
   // Combine into the master Planning Book Markdown
-  const fullText = [stage1Text, stage2Text, stage3Text].join('\n\n---\n\n')
-  console.log(`[generator] Total Master Curriculum Length: ${fullText.length} chars (Target: 18+ pages)`)
+  const fullText = [stage1Text, section2, section3, stage2Text, '---', stage3Text].join('\n\n')
+  console.log(`[generator] Total Master Curriculum Length: ${fullText.length} chars in ${Math.round((Date.now() - startedAt) / 1000)}s`)
 
-  // Extract Rubrics Section
-  const rubricsMarkdown = [stage2Text, stage3Text].join('\n\n---\n\n')
+  // Rubrics tab: evaluation plan + pillars/rubric + annexes
+  const rubricsMarkdown = [section3, stage2Text, '---', stage3Text].join('\n\n')
 
-  // Extract Cibercolegios block
+  // Cibercolegios block
   let cibercolegiosSnippet = ''
   const ciberMatch = fullText.match(/```(?:text|markdown)?\s*([\s\S]*?)\s*```/i)
   if (ciberMatch && ciberMatch[1].trim().length > 10) {
@@ -595,20 +978,45 @@ export async function generatePlanningDocument(
     cibercolegiosSnippet = `NOMBRE (instrumento): Secuencia Didáctica - ${params.tema} · Grado: ${params.grado} · Docente: ${params.docente} · Rúbrica Menú de Desafíos: Bronze (4.0-4.5) · Silver (4.6-4.7) · Gold (4.8-5.0) · Sin categoría (1.0-3.9)`
   }
 
+  const extraIssues: VerificationIssue[] = audit.flags.map((f) => ({
+    severity: 'advertencia' as const,
+    section: 'Referentes (auditoría)',
+    message: `La fila "${f.rowLabel}" no pudo respaldarse con una cita literal de los documentos rectores.`,
+  }))
+  if (!audit.ok) {
+    extraIssues.push({
+      severity: 'info',
+      section: 'Referentes (auditoría)',
+      message: 'La auditoría automática de referentes no estuvo disponible en esta generación; verifica manualmente los datos oficiales.',
+    })
+  }
+
+  const verification = verifyPlanningBook({
+    markdown: fullText,
+    effectiveWeeks: total,
+    contextText: allContextText,
+    tema: params.tema,
+    area: params.area,
+    pesos: skeleton.pesos,
+    truncatedStages,
+    extraIssues,
+  })
+  console.log(`[generator] Verification score: ${verification.score}/100 (${verification.issues.length} issue(s))`)
+
   const excelSpec = {
     docente: params.docente,
     area: params.area,
     grado: params.grado,
     periodo: String(params.periodo),
-    semanas: params.semanas ? `${params.semanas} (${params.semanasEfectivas || '4 semanas efectivas'})` : '4 semanas',
-    semanasEfectivas: params.semanasEfectivas || '4 semanas efectivas',
+    semanas: params.semanas ? `${params.semanas} (${params.semanasEfectivas || `${total} semanas efectivas`})` : `${total} semanas`,
+    semanasEfectivas: params.semanasEfectivas || `${total} semanas efectivas`,
     tema: params.tema,
     evidenciaPrincipal: `Evidencia principal: ${params.tema}`,
     actividades: [
-      { nombre: 'Actividad 1 (SABER - Conceptos & Teoría)', pilar: 'SABER' as const, porcentaje: 35 },
-      { nombre: 'Actividad 2 (SABER HACER - Producto ACE)', pilar: 'SABER HACER' as const, porcentaje: 35 },
-      { nombre: 'Actividad 3 (SABER SER - Autonomía & Metacognición)', pilar: 'SABER SER' as const, porcentaje: 20 },
-      { nombre: 'Actividad 4 (SABER CONVIVIR - Trabajo en Equipo)', pilar: 'SABER CONVIVIR' as const, porcentaje: 10 },
+      { nombre: 'Actividad 1 (SABER - Conceptos & Teoría)', pilar: 'SABER' as const, porcentaje: skeleton.pesos.SABER },
+      { nombre: 'Actividad 2 (SABER HACER - Producto ACE)', pilar: 'SABER HACER' as const, porcentaje: skeleton.pesos['SABER HACER'] },
+      { nombre: 'Actividad 3 (SABER SER - Autonomía & Metacognición)', pilar: 'SABER SER' as const, porcentaje: skeleton.pesos['SABER SER'] },
+      { nombre: 'Actividad 4 (SABER CONVIVIR - Trabajo en Equipo)', pilar: 'SABER CONVIVIR' as const, porcentaje: skeleton.pesos['SABER CONVIVIR'] },
     ],
   }
 
@@ -617,5 +1025,6 @@ export async function generatePlanningDocument(
     rubricsMarkdown,
     cibercolegiosSnippet,
     excelSpec,
+    verification,
   }
 }

@@ -75,6 +75,8 @@ export default function PreviewPage({ params }: PreviewPageProps) {
   const [rubricsMarkdown, setRubricsMarkdown] = useState('')
   const [cibercolegiosSnippet, setCibercolegiosSnippet] = useState('')
   const [excelMetadata, setExcelMetadata] = useState<any>(null)
+  const [verification, setVerification] = useState<any>(null)
+  const [docMetadata, setDocMetadata] = useState<any>(null)
 
   // Structured blocks for WYSIWYG editing
   const [blocks, setBlocks] = useState<DocumentBlock[]>([])
@@ -106,6 +108,8 @@ export default function PreviewPage({ params }: PreviewPageProps) {
           let rubMd = json.document.content
           let ciberSnip = ''
           let xlsSpec = null
+          let verif = null
+          let meta = null
 
           try {
             const parsed = JSON.parse(json.document.content)
@@ -114,6 +118,8 @@ export default function PreviewPage({ params }: PreviewPageProps) {
               rubMd = parsed.rubricsMarkdown || parsed.planningBookMarkdown
               ciberSnip = parsed.cibercolegiosSnippet || ''
               xlsSpec = parsed.excelSpec || null
+              verif = parsed.verification || null
+              meta = parsed.metadata || null
             }
           } catch {
             // legacy plain markdown format
@@ -123,6 +129,8 @@ export default function PreviewPage({ params }: PreviewPageProps) {
           setRubricsMarkdown(rubMd)
           setCibercolegiosSnippet(ciberSnip)
           setExcelMetadata(xlsSpec)
+          setVerification(verif)
+          setDocMetadata(meta)
 
           // Parse markdown to blocks
           const parsedBlocks = parseMarkdownToBlocks(planMd)
@@ -218,6 +226,8 @@ export default function PreviewPage({ params }: PreviewPageProps) {
         rubricsMarkdown: rubricsMarkdown,
         cibercolegiosSnippet: cibercolegiosSnippet,
         excelSpec: excelMetadata,
+        ...(verification ? { verification } : {}),
+        ...(docMetadata ? { metadata: docMetadata } : {}),
       })
 
       const res = await fetch(`/api/generated-documents`, {
@@ -523,6 +533,74 @@ export default function PreviewPage({ params }: PreviewPageProps) {
 
             {/* Right Side Column: Actions & Download Cards */}
             <div className="space-y-5">
+              {/* Verification & Grounding Audit Card */}
+              {verification && (
+                <Card className="border-slate-200 shadow-md bg-white rounded-2xl overflow-hidden">
+                  <CardHeader className="pb-2.5 bg-slate-50/80 border-b border-slate-100">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-xs font-bold text-[#0E1B4D] flex items-center gap-1.5">
+                        <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                        Verificación Curricular y Anti-Alucinación
+                      </CardTitle>
+                      <Badge
+                        className={
+                          verification.score >= 85
+                            ? 'bg-emerald-600 text-white text-[10px] font-bold'
+                            : verification.score >= 65
+                              ? 'bg-amber-500 text-white text-[10px] font-bold'
+                              : 'bg-red-600 text-white text-[10px] font-bold'
+                        }
+                      >
+                        {verification.score}/100
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-3 space-y-2.5 text-[11px] text-slate-600">
+                    {verification.stats && (
+                      <div className="grid grid-cols-2 gap-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                        <div>
+                          <span className="text-[10px] text-slate-500 block">Profundidad Semanal</span>
+                          <span className="font-bold text-[#0E1B4D]">
+                            {verification.stats.semanasConProfundidadCompleta}/{verification.stats.semanasEfectivas} sem (~{verification.stats.caracteresPromedioPorSemana} car/sem)
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-500 block">Suma Pilares (35/35/20/10)</span>
+                          <span className="font-bold text-[#0E1B4D]">
+                            {verification.stats.sumaSABER}% / {verification.stats.sumaSABERHACER}% / {verification.stats.sumaSABERSER}% / {verification.stats.sumaSABERCONVIVIR}%
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {Array.isArray(verification.issues) && verification.issues.length === 0 ? (
+                      <p className="flex items-center gap-1.5 text-emerald-700 font-medium">
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                        100% anclado a documentos rectores y profundidad verificada.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {(verification.issues || []).map((issue: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className={`p-2 rounded-lg border text-[10px] leading-snug ${
+                              issue.severity === 'critico'
+                                ? 'bg-red-50 border-red-200 text-red-800'
+                                : issue.severity === 'advertencia'
+                                  ? 'bg-amber-50 border-amber-200 text-amber-800'
+                                  : 'bg-blue-50 border-blue-200 text-blue-800'
+                            }`}
+                          >
+                            <span className="font-bold uppercase mr-1">[{issue.section}]</span>
+                            {issue.message}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Primary Word & PDF Download Card */}
               <Card className="border-slate-200 shadow-md bg-white rounded-2xl">
                 <CardHeader className="pb-3">

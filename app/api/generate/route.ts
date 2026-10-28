@@ -284,6 +284,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       rubricsMarkdown: generated.rubricsMarkdown,
       cibercolegiosSnippet: generated.cibercolegiosSnippet,
       excelSpec: generated.excelSpec,
+      verification: generated.verification,
       metadata: {
         docente,
         area,

@@ -204,31 +204,103 @@ export async function generatePdf(params: GeneratePdfParams): Promise<Buffer> {
         currentY += headerH
 
         // Data Rows
-        dataRows.forEach((r, ri) => {
-          const rowH = getRowHeight(r, false)
-          checkPageBreak(rowH)
+        const BODY_BOTTOM = PAGE_HEIGHT - 45
+        const PAGE_CAPACITY = BODY_BOTTOM - 70 - 8
 
-          doc.save()
-          const bg = isTwoCol ? undefined : (ri % 2 === 1 ? '#F8FAFC' : '#FFFFFF')
-          if (bg) {
-            doc.rect(MARGIN, currentY, CONTENT_WIDTH, rowH).fill(bg)
+        // Largest prefix of `text` (cut on paragraph, then word boundaries) that fits in `availH`.
+        const takeFitting = (text: string, width: number, availH: number, font: string): [string, string] => {
+          if (!text) return ['', '']
+          doc.font(font).fontSize(7)
+          if (doc.heightOfString(text, { width }) <= availH) return [text, '']
+          const paras = text.split('\n')
+          let taken = ''
+          let i = 0
+          for (; i < paras.length; i++) {
+            const candidate = taken ? taken + '\n' + paras[i] : paras[i]
+            if (doc.heightOfString(candidate, { width }) <= availH) taken = candidate
+            else break
           }
-          doc.rect(MARGIN, currentY, CONTENT_WIDTH, rowH).lineWidth(0.5).stroke(COLOR_BORDER)
+          if (taken || i >= paras.length) return [taken, paras.slice(i).join('\n')]
+
+          // A single paragraph taller than the available space: cut it on word boundaries
+          const words = paras[i].split(' ')
+          let cand = ''
+          let w = 0
+          for (; w < words.length; w++) {
+            const next = cand ? cand + ' ' + words[w] : words[w]
+            if (doc.heightOfString(next, { width }) <= availH) cand = next
+            else break
+          }
+          if (!cand) cand = words[w++] || ''
+          return [cand, [words.slice(w).join(' '), ...paras.slice(i + 1)].join('\n').replace(/^\n+/, '')]
+        }
+
+        const drawRowSlice = (cells: string[], h: number, ri: number, isFirstSlice: boolean) => {
+          doc.save()
+          const bg = isTwoCol ? undefined : ri % 2 === 1 ? '#F8FAFC' : '#FFFFFF'
+          if (bg) {
+            doc.rect(MARGIN, currentY, CONTENT_WIDTH, h).fill(bg)
+          }
+          doc.rect(MARGIN, currentY, CONTENT_WIDTH, h).lineWidth(0.5).stroke(COLOR_BORDER)
 
           let rowX = MARGIN
-          r.forEach((c, ci) => {
+          cells.forEach((c, ci) => {
             const w = colWidths[ci]
             if (isTwoCol && ci === 0) {
-              doc.rect(rowX, currentY, w, rowH).fillAndStroke(COLOR_GRAY_BG, COLOR_BORDER)
+              doc.rect(rowX, currentY, w, h).fillAndStroke(COLOR_GRAY_BG, COLOR_BORDER)
               doc.font(fontBold).fontSize(7).fillColor(COLOR_NAVY)
             } else {
               doc.font(fontReg).fontSize(7).fillColor(COLOR_TEXT)
             }
-            doc.text(cleanText(c), rowX + 4, currentY + 4, { width: w - 8, align: 'left' })
+            const text = c || (ci === 0 && !isFirstSlice ? '(continúa)' : '')
+            doc.text(text, rowX + 4, currentY + 4, { width: w - 8, align: 'left' })
             rowX += w
           })
           doc.restore()
-          currentY += rowH
+          currentY += h
+        }
+
+        dataRows.forEach((r, ri) => {
+          let cells = r.map((c) => cleanText(c))
+          const fullH = getRowHeight(cells, false)
+
+          // Normal row: keep it whole (page break first if it does not fit in the remaining space)
+          if (fullH <= PAGE_CAPACITY) {
+            checkPageBreak(fullH)
+            drawRowSlice(cells, fullH, ri, true)
+            return
+          }
+
+          // Row taller than a whole page (very detailed pedagogical arc): split it across pages
+          let isFirst = true
+          let guard = 0
+          while (cells.some((c) => c.length > 0) && guard++ < 200) {
+            let avail = BODY_BOTTOM - currentY - 8
+            if (avail < 90) {
+              doc.addPage()
+              drawHeader()
+              currentY = 70
+              avail = BODY_BOTTOM - currentY - 8
+            }
+            const slices: string[] = []
+            const rests: string[] = []
+            cells.forEach((c, ci) => {
+              const w = (colWidths[ci] || 50) - 8
+              const font = isTwoCol && ci === 0 ? fontBold : fontReg
+              const [take, rest] = takeFitting(c, w, avail - 8, font)
+              slices.push(take)
+              rests.push(rest)
+            })
+            const sliceH = Math.min(avail, getRowHeight(slices.map((t, ci) => t || (ci === 0 && !isFirst ? '(continúa)' : '')), false))
+            drawRowSlice(slices, sliceH, ri, isFirst)
+            cells = rests
+            isFirst = false
+            if (cells.some((c) => c.length > 0)) {
+              doc.addPage()
+              drawHeader()
+              currentY = 70
+            }
+          }
         })
 
         currentY += 8
