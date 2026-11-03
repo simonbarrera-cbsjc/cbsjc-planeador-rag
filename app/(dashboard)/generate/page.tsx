@@ -219,47 +219,139 @@ export default function GeneratePage() {
 
     try {
       setIsGenerating(true)
-      setProgressPercent(15)
-      setStepMessage('Extrayendo texto y analizando documentos rectores (Plan de Área, SIAP, Cuadernillo)...')
+      setProgressPercent(10)
+      setStepMessage('Preparando subida segura de documentos rectores...')
 
-      const formData = new FormData()
-      formData.append('docente', docente.trim())
-      formData.append('area', area)
-      formData.append('grado', grado)
-      formData.append('periodo', periodo)
-      formData.append('semanas', semanas.trim())
-      formData.append('semanasEfectivas', semanasEfectivas.trim())
-      formData.append('tema', tema.trim())
-      formData.append('additionalInstructions', additionalInstructions.trim())
+      // 1. Prepare file list for direct-to-storage signed uploads (bypasses Vercel 4.5 MB gateway limit)
+      const filesToUpload = [
+        { key: 'plan_de_area', file: planDeAreaFile!, label: '1. Plan de Área' },
+        { key: 'siap', file: siapFile!, label: '2. SIAP Institucional' },
+        { key: 'cuadernillo', file: cuadernilloFile!, label: '3. Cuadernillo' },
+        ...adicionalesFiles.map((file, idx) => ({
+          key: `adicional_${idx}`,
+          file,
+          label: `Adicional: ${file.name}`,
+        })),
+      ]
 
-      formData.append('plan_de_area', planDeAreaFile!)
-      formData.append('siap', siapFile!)
-      formData.append('cuadernillo', cuadernilloFile!)
-
-      adicionalesFiles.forEach((file) => {
-        formData.append('adicionales', file)
+      // 2. Request signed upload URLs
+      const uploadUrlRes = await fetch('/api/generate/upload-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: filesToUpload.map((item) => ({
+            key: item.key,
+            filename: item.file.name,
+            contentType: item.file.type || 'application/octet-stream',
+            size: item.file.size,
+          })),
+        }),
       })
 
-      // Simulate dynamic progression while AI runs in parallel
+      const uploadUrlText = await uploadUrlRes.text()
+      let uploadUrlJson: any
+      try {
+        uploadUrlJson = JSON.parse(uploadUrlText)
+      } catch {
+        throw new Error(
+          `Error al autorizar subida (HTTP ${uploadUrlRes.status}): ${uploadUrlText.slice(0, 150) || 'Respuesta no válida'}`
+        )
+      }
+
+      if (!uploadUrlRes.ok || !uploadUrlJson.success) {
+        throw new Error(uploadUrlJson.error || 'Error al autorizar la subida de los documentos.')
+      }
+
+      // 3. Upload each file directly to Supabase Storage via signed URL
+      const uploadsList = uploadUrlJson.uploads || []
+      const uploadedMap: Record<string, { storagePath: string; filename: string; contentType: string }> = {}
+
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const item = filesToUpload[i]
+        const spec = uploadsList.find((u: any) => u.key === item.key)
+        if (!spec) {
+          throw new Error(`No se recibió autorización de subida para "${item.label}".`)
+        }
+
+        setStepMessage(`Subiendo documento a la nube (${i + 1}/${filesToUpload.length}: ${item.file.name})...`)
+        setProgressPercent(10 + Math.round(((i + 1) / filesToUpload.length) * 20))
+
+        const putRes = await fetch(spec.signedUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': item.file.type || 'application/octet-stream',
+          },
+          body: item.file,
+        })
+
+        if (!putRes.ok) {
+          throw new Error(
+            `Error al subir "${item.file.name}" a almacenamiento seguro (HTTP ${putRes.status}).`
+          )
+        }
+
+        uploadedMap[item.key] = {
+          storagePath: spec.storagePath,
+          filename: item.file.name,
+          contentType: item.file.type || 'application/octet-stream',
+        }
+      }
+
+      // 4. Trigger multi-stage generation with a lightweight JSON payload (few KB)
+      setProgressPercent(35)
+      setStepMessage('Extrayendo texto y analizando documentos rectores (Plan de Área, SIAP, Cuadernillo)...')
+
       const timer1 = setTimeout(() => {
-        setProgressPercent(45)
+        setProgressPercent(55)
         setStepMessage('Ejecutando motor multi-etapa: Generando Identificación y Arco Pedagógico (Semanas 1 a 4)...')
-      }, 4000)
+      }, 5000)
 
       const timer2 = setTimeout(() => {
         setProgressPercent(75)
         setStepMessage('Generando Rúbricas Menú de Desafíos, Planilla de Notas y Evaluaciones Finales...')
-      }, 12000)
+      }, 15000)
+
+      const payload = {
+        docente: docente.trim(),
+        area,
+        grado,
+        periodo,
+        semanas: semanas.trim(),
+        semanasEfectivas: semanasEfectivas.trim(),
+        tema: tema.trim(),
+        additionalInstructions: additionalInstructions.trim(),
+        uploadedFiles: {
+          plan_de_area: uploadedMap['plan_de_area'],
+          siap: uploadedMap['siap'],
+          cuadernillo: uploadedMap['cuadernillo'],
+          adicionales: adicionalesFiles
+            .map((_, idx) => uploadedMap[`adicional_${idx}`])
+            .filter(Boolean),
+        },
+      }
 
       const res = await fetch('/api/generate', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       })
 
       clearTimeout(timer1)
       clearTimeout(timer2)
 
-      const json = await res.json()
+      const resText = await res.text()
+      let json: any
+      try {
+        json = JSON.parse(resText)
+      } catch {
+        if (res.status === 413 || resText.toLowerCase().includes('request entity too large')) {
+          throw new Error('El tamaño de los documentos supera el límite permitido por el servidor.')
+        }
+        if (res.status === 504 || resText.toLowerCase().includes('timeout')) {
+          throw new Error('El servidor tardó más de lo esperado en procesar la planeación (Timeout). Por favor intenta de nuevo.')
+        }
+        throw new Error(`Error en el servidor (${res.status}): ${resText.slice(0, 160) || 'Respuesta no válida'}`)
+      }
 
       if (!res.ok || !json.success) {
         throw new Error(json.error || 'Error al generar la planeación')

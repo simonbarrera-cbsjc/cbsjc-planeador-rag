@@ -27,16 +27,30 @@ import {
 
 export const maxDuration = 300 // 300 seconds timeout for exhaustive 18+ page AI generation and deep extraction
 
-const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024 // 25 MB per file
-const MAX_TOTAL_SIZE_BYTES = 60 * 1024 * 1024 // 60 MB total payload
+const STORAGE_BUCKET = 'source-documents'
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB per file
+const MAX_TOTAL_SIZE_BYTES = 100 * 1024 * 1024 // 100 MB total payload
 const MAX_ADDITIONAL_FILES = 5
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.doc', '.md', '.txt']
 
-function isAllowedFile(file: File): boolean {
-  const name = file.name.toLowerCase()
-  return ALLOWED_EXTENSIONS.some((ext) => name.endsWith(ext))
+function isAllowedFile(name: string): boolean {
+  const lower = name.toLowerCase()
+  return ALLOWED_EXTENSIONS.some((ext) => lower.endsWith(ext))
 }
+
+const fileRefSchema = z.object({
+  storagePath: z.string().min(1, 'La ruta de almacenamiento es requerida'),
+  filename: z.string().min(1, 'El nombre de archivo es requerido'),
+  contentType: z.string().optional(),
+})
+
+const uploadedFilesSchema = z.object({
+  plan_de_area: fileRefSchema,
+  siap: fileRefSchema,
+  cuadernillo: fileRefSchema,
+  adicionales: z.array(fileRefSchema).optional().default([]),
+})
 
 const generateFormSchema = z.object({
   docente: z.string().trim().min(1, 'El nombre del docente es obligatorio').max(200, 'El nombre no puede superar 200 caracteres'),
@@ -75,140 +89,263 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
   }
 
-  let formData: FormData
-  try {
-    formData = await request.formData()
-  } catch {
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Los datos del formulario están dañados o no pudieron ser procesados (FormData inválido).',
-      },
-      { status: 400 }
-    )
-  }
+  const isJson = Boolean(request.headers.get('content-type')?.includes('application/json'))
+  const tempStoragePathsToClean: string[] = []
 
-  const rawPeriodo = String(formData.get('periodo') || 'I').trim().toUpperCase()
+  let docente = ''
+  let area = 'general'
+  let grado = ''
   let normalizedPeriodo: 'I' | 'II' | 'III' | 'IV' = 'I'
-  if (rawPeriodo.includes('IV') || rawPeriodo === '4') normalizedPeriodo = 'IV'
-  else if (rawPeriodo.includes('III') || rawPeriodo === '3') normalizedPeriodo = 'III'
-  else if (rawPeriodo.includes('II') || rawPeriodo === '2') normalizedPeriodo = 'II'
-  else normalizedPeriodo = 'I'
+  let semanas = '4 semanas (sesiones de 90 min)'
+  let semanasEfectivas = '4 semanas efectivas de clase directa'
+  let tema = 'Secuencia Didáctica'
+  let additionalInstructions = ''
 
-  const rawFormData = {
-    docente: String(formData.get('docente') || formData.get('author') || '').trim(),
-    area: String(formData.get('area') || 'general').trim(),
-    grado: String(formData.get('grado') || '').trim(),
-    periodo: normalizedPeriodo,
-    semanas: String(formData.get('semanas') || '4 semanas (sesiones de 90 min)').trim(),
-    semanasEfectivas: String(formData.get('semanasEfectivas') || formData.get('semanas_efectivas') || '4 semanas efectivas de clase directa').trim(),
-    tema: String(formData.get('tema') || formData.get('title') || 'Secuencia Didáctica').trim(),
-    additionalInstructions: String(formData.get('additionalInstructions') || formData.get('instrucciones') || '').trim(),
-  }
+  const contextDocs: Array<{
+    tipo: 'plan_de_area' | 'siap' | 'cuadernillo' | 'adicional'
+    filename: string
+    content: string
+  }> = []
 
-  const parsedFields = generateFormSchema.safeParse(rawFormData)
-  if (!parsedFields.success) {
-    const errorMsg = parsedFields.error.issues.map((i) => i.message).join('. ') || 'Campos del formulario incompletos o inválidos.'
-    return NextResponse.json(
-      { success: false, error: errorMsg },
-      { status: 400 }
-    )
-  }
-
-  const { docente, area, grado, periodo, semanas, semanasEfectivas, tema, additionalInstructions } = parsedFields.data
-
-  // Extract uploaded files
-  const planDeAreaFile = formData.get('plan_de_area') as File | null
-  const siapFile = formData.get('siap') as File | null
-  const cuadernilloFile = formData.get('cuadernillo') as File | null
-  const adicionalesFiles = formData.getAll('adicionales') as File[]
-
-  if (!planDeAreaFile || !(planDeAreaFile instanceof File)) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'El documento rector "Plan de Área" es obligatorio para la alineación curricular del CBSJC.',
-      },
-      { status: 400 }
-    )
-  }
-  if (!siapFile || !(siapFile instanceof File)) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'El documento "SIAP" (Malla Curricular Institucional) es obligatorio para estructurar la secuencia.',
-      },
-      { status: 400 }
-    )
-  }
-  if (!cuadernilloFile || !(cuadernilloFile instanceof File)) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'El documento "Cuadernillo de Asignatura" es obligatorio como referente evaluativo.',
-      },
-      { status: 400 }
-    )
-  }
-
-  // Validate file types and sizes
-  const mandatoryFiles = [
-    { file: planDeAreaFile, label: 'Plan de Área' },
-    { file: siapFile, label: 'SIAP' },
-    { file: cuadernilloFile, label: 'Cuadernillo' },
-  ]
-
-  let totalBytes = 0
-  for (const { file, label } of mandatoryFiles) {
-    if (!isAllowedFile(file)) {
+  if (isJson) {
+    let body: any
+    try {
+      body = await request.json()
+    } catch {
       return NextResponse.json(
-        { success: false, error: `Formato no permitido para "${label}" (${file.name}). Permitidos: PDF, Word (.docx), Markdown (.md, .txt).` },
-        { status: 415 }
+        { success: false, error: 'Cuerpo de solicitud inválido (se esperaba JSON).' },
+        { status: 400 }
       )
     }
-    if (file.size > MAX_FILE_SIZE_BYTES) {
+
+    const rawPeriodo = String(body.periodo || 'I').trim().toUpperCase()
+    if (rawPeriodo.includes('IV') || rawPeriodo === '4') normalizedPeriodo = 'IV'
+    else if (rawPeriodo.includes('III') || rawPeriodo === '3') normalizedPeriodo = 'III'
+    else if (rawPeriodo.includes('II') || rawPeriodo === '2') normalizedPeriodo = 'II'
+    else normalizedPeriodo = 'I'
+
+    const parsedFields = generateFormSchema.safeParse({
+      docente: String(body.docente || body.author || '').trim(),
+      area: String(body.area || 'general').trim(),
+      grado: String(body.grado || '').trim(),
+      periodo: normalizedPeriodo,
+      semanas: String(body.semanas || '4 semanas (sesiones de 90 min)').trim(),
+      semanasEfectivas: String(body.semanasEfectivas || body.semanas_efectivas || '4 semanas efectivas de clase directa').trim(),
+      tema: String(body.tema || body.title || 'Secuencia Didáctica').trim(),
+      additionalInstructions: String(body.additionalInstructions || body.instrucciones || '').trim(),
+    })
+
+    if (!parsedFields.success) {
+      const errorMsg = parsedFields.error.issues.map((i) => i.message).join('. ') || 'Campos incompletos o inválidos.'
+      return NextResponse.json({ success: false, error: errorMsg }, { status: 400 })
+    }
+
+    docente = parsedFields.data.docente
+    area = parsedFields.data.area
+    grado = parsedFields.data.grado
+    semanas = parsedFields.data.semanas
+    semanasEfectivas = parsedFields.data.semanasEfectivas
+    tema = parsedFields.data.tema
+    additionalInstructions = parsedFields.data.additionalInstructions
+
+    const parsedFiles = uploadedFilesSchema.safeParse(body.uploadedFiles)
+    if (!parsedFiles.success) {
       return NextResponse.json(
-        { success: false, error: `El archivo "${label}" supera el tamaño máximo permitido de 25 MB.` },
-        { status: 413 }
+        {
+          success: false,
+          error: 'Faltan documentos rectores obligatorios o las referencias de almacenamiento no son válidas.',
+        },
+        { status: 400 }
       )
     }
-    totalBytes += file.size
-  }
 
-  if (adicionalesFiles.length > MAX_ADDITIONAL_FILES) {
-    return NextResponse.json(
-      { success: false, error: `Se permite un máximo de ${MAX_ADDITIONAL_FILES} documentos adicionales.` },
-      { status: 400 }
-    )
-  }
+    const { plan_de_area, siap, cuadernillo, adicionales } = parsedFiles.data
 
-  for (const addFile of adicionalesFiles) {
-    if (addFile instanceof File && addFile.size > 0) {
-      if (!isAllowedFile(addFile)) {
+    const downloadAndExtract = async (
+      item: { storagePath: string; filename: string; contentType?: string },
+      label: string
+    ) => {
+      tempStoragePathsToClean.push(item.storagePath)
+      const { data: blob, error: dlError } = await supabaseAdmin.storage
+        .from(STORAGE_BUCKET)
+        .download(item.storagePath)
+
+      if (dlError || !blob) {
+        throw new Error(`Error al leer "${label}" (${item.filename}) desde almacenamiento: ${dlError?.message || 'Archivo no encontrado'}`)
+      }
+
+      const buf = Buffer.from(await blob.arrayBuffer())
+      return await extractTextFromFile(buf, item.filename, item.contentType)
+    }
+
+    try {
+      const [planRes, siapRes, cuadRes] = await Promise.all([
+        downloadAndExtract(plan_de_area, 'Plan de Área'),
+        downloadAndExtract(siap, 'SIAP Institucional'),
+        downloadAndExtract(cuadernillo, 'Cuadernillo'),
+      ])
+
+      contextDocs.push(
+        { tipo: 'plan_de_area', filename: plan_de_area.filename, content: planRes.text },
+        { tipo: 'siap', filename: siap.filename, content: siapRes.text },
+        { tipo: 'cuadernillo', filename: cuadernillo.filename, content: cuadRes.text }
+      )
+
+      for (const add of adicionales) {
+        try {
+          const addRes = await downloadAndExtract(add, 'Documento Adicional')
+          contextDocs.push({
+            tipo: 'adicional',
+            filename: add.filename,
+            content: addRes.text,
+          })
+        } catch (addErr) {
+          console.warn(`[generate] Skipping additional file ${add.filename}:`, addErr)
+        }
+      }
+    } catch (extractErr) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: extractErr instanceof Error ? extractErr.message : 'Error al procesar los documentos rectores.',
+        },
+        { status: 422 }
+      )
+    }
+  } else {
+    // Fallback: multipart/form-data for small files or legacy clients
+    let formData: FormData
+    try {
+      formData = await request.formData()
+    } catch {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Los datos del formulario están dañados o no pudieron ser procesados (FormData inválido).',
+        },
+        { status: 400 }
+      )
+    }
+
+    const rawPeriodo = String(formData.get('periodo') || 'I').trim().toUpperCase()
+    if (rawPeriodo.includes('IV') || rawPeriodo === '4') normalizedPeriodo = 'IV'
+    else if (rawPeriodo.includes('III') || rawPeriodo === '3') normalizedPeriodo = 'III'
+    else if (rawPeriodo.includes('II') || rawPeriodo === '2') normalizedPeriodo = 'II'
+    else normalizedPeriodo = 'I'
+
+    const rawFormData = {
+      docente: String(formData.get('docente') || formData.get('author') || '').trim(),
+      area: String(formData.get('area') || 'general').trim(),
+      grado: String(formData.get('grado') || '').trim(),
+      periodo: normalizedPeriodo,
+      semanas: String(formData.get('semanas') || '4 semanas (sesiones de 90 min)').trim(),
+      semanasEfectivas: String(formData.get('semanasEfectivas') || formData.get('semanas_efectivas') || '4 semanas efectivas de clase directa').trim(),
+      tema: String(formData.get('tema') || formData.get('title') || 'Secuencia Didáctica').trim(),
+      additionalInstructions: String(formData.get('additionalInstructions') || formData.get('instrucciones') || '').trim(),
+    }
+
+    const parsedFields = generateFormSchema.safeParse(rawFormData)
+    if (!parsedFields.success) {
+      const errorMsg = parsedFields.error.issues.map((i) => i.message).join('. ') || 'Campos del formulario incompletos o inválidos.'
+      return NextResponse.json({ success: false, error: errorMsg }, { status: 400 })
+    }
+
+    docente = parsedFields.data.docente
+    area = parsedFields.data.area
+    grado = parsedFields.data.grado
+    semanas = parsedFields.data.semanas
+    semanasEfectivas = parsedFields.data.semanasEfectivas
+    tema = parsedFields.data.tema
+    additionalInstructions = parsedFields.data.additionalInstructions
+
+    const planDeAreaFile = formData.get('plan_de_area') as File | null
+    const siapFile = formData.get('siap') as File | null
+    const cuadernilloFile = formData.get('cuadernillo') as File | null
+    const adicionalesFiles = formData.getAll('adicionales') as File[]
+
+    if (!planDeAreaFile || !(planDeAreaFile instanceof File)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'El documento rector "Plan de Área" es obligatorio para la alineación curricular del CBSJC.',
+        },
+        { status: 400 }
+      )
+    }
+    if (!siapFile || !(siapFile instanceof File)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'El documento "SIAP" (Malla Curricular Institucional) es obligatorio para estructurar la secuencia.',
+        },
+        { status: 400 }
+      )
+    }
+    if (!cuadernilloFile || !(cuadernilloFile instanceof File)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'El documento "Cuadernillo de Asignatura" es obligatorio como referente evaluativo.',
+        },
+        { status: 400 }
+      )
+    }
+
+    const mandatoryFiles = [
+      { file: planDeAreaFile, label: 'Plan de Área' },
+      { file: siapFile, label: 'SIAP' },
+      { file: cuadernilloFile, label: 'Cuadernillo' },
+    ]
+
+    let totalBytes = 0
+    for (const { file, label } of mandatoryFiles) {
+      if (!isAllowedFile(file.name)) {
         return NextResponse.json(
-          { success: false, error: `Formato no permitido en documento adicional (${addFile.name}).` },
+          { success: false, error: `Formato no permitido para "${label}" (${file.name}). Permitidos: PDF, Word (.docx), Markdown (.md, .txt).` },
           { status: 415 }
         )
       }
-      if (addFile.size > MAX_FILE_SIZE_BYTES) {
+      if (file.size > MAX_FILE_SIZE_BYTES) {
         return NextResponse.json(
-          { success: false, error: `El documento adicional "${addFile.name}" supera los 25 MB.` },
+          { success: false, error: `El archivo "${label}" supera el tamaño máximo permitido de 50 MB.` },
           { status: 413 }
         )
       }
-      totalBytes += addFile.size
+      totalBytes += file.size
     }
-  }
 
-  if (totalBytes > MAX_TOTAL_SIZE_BYTES) {
-    return NextResponse.json(
-      { success: false, error: `El tamaño acumulado de los archivos excede el límite de 60 MB.` },
-      { status: 413 }
-    )
-  }
+    if (adicionalesFiles.length > MAX_ADDITIONAL_FILES) {
+      return NextResponse.json(
+        { success: false, error: `Se permite un máximo de ${MAX_ADDITIONAL_FILES} documentos adicionales.` },
+        { status: 400 }
+      )
+    }
 
-  try {
-    // 1. Extract text from all files in parallel with descriptive error tracking
+    for (const addFile of adicionalesFiles) {
+      if (addFile instanceof File && addFile.size > 0) {
+        if (!isAllowedFile(addFile.name)) {
+          return NextResponse.json(
+            { success: false, error: `Formato no permitido en documento adicional (${addFile.name}).` },
+            { status: 415 }
+          )
+        }
+        if (addFile.size > MAX_FILE_SIZE_BYTES) {
+          return NextResponse.json(
+            { success: false, error: `El documento adicional "${addFile.name}" supera los 50 MB.` },
+            { status: 413 }
+          )
+        }
+        totalBytes += addFile.size
+      }
+    }
+
+    if (totalBytes > MAX_TOTAL_SIZE_BYTES) {
+      return NextResponse.json(
+        { success: false, error: `El tamaño acumulado de los archivos excede el límite de 100 MB.` },
+        { status: 413 }
+      )
+    }
+
     const extractFileSafely = async (file: File, label: string) => {
       try {
         const buf = await file.arrayBuffer()
@@ -219,38 +356,53 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    const [planDeAreaRes, siapRes, cuadernilloRes] = await Promise.all([
-      extractFileSafely(planDeAreaFile, 'Plan de Área'),
-      extractFileSafely(siapFile, 'SIAP'),
-      extractFileSafely(cuadernilloFile, 'Cuadernillo'),
-    ])
+    try {
+      const [planDeAreaRes, siapRes, cuadernilloRes] = await Promise.all([
+        extractFileSafely(planDeAreaFile, 'Plan de Área'),
+        extractFileSafely(siapFile, 'SIAP'),
+        extractFileSafely(cuadernilloFile, 'Cuadernillo'),
+      ])
 
-    const contextDocs: Array<{
-      tipo: 'plan_de_area' | 'siap' | 'cuadernillo' | 'adicional'
-      filename: string
-      content: string
-    }> = [
-      { tipo: 'plan_de_area', filename: planDeAreaFile.name, content: planDeAreaRes.text },
-      { tipo: 'siap', filename: siapFile.name, content: siapRes.text },
-      { tipo: 'cuadernillo', filename: cuadernilloFile.name, content: cuadernilloRes.text },
-    ]
+      contextDocs.push(
+        { tipo: 'plan_de_area', filename: planDeAreaFile.name, content: planDeAreaRes.text },
+        { tipo: 'siap', filename: siapFile.name, content: siapRes.text },
+        { tipo: 'cuadernillo', filename: cuadernilloFile.name, content: cuadernilloRes.text }
+      )
 
-    // Process additional files if present
-    for (const addFile of adicionalesFiles) {
-      if (addFile instanceof File && addFile.size > 0) {
-        try {
-          const extRes = await extractFileSafely(addFile, 'Documento Adicional')
-          contextDocs.push({
-            tipo: 'adicional',
-            filename: addFile.name,
-            content: extRes.text,
-          })
-        } catch (addErr) {
-          console.warn(`[POST /api/generate] Skipping unreadable additional file ${addFile.name}:`, addErr)
+      for (const addFile of adicionalesFiles) {
+        if (addFile instanceof File && addFile.size > 0) {
+          try {
+            const extRes = await extractFileSafely(addFile, 'Documento Adicional')
+            contextDocs.push({
+              tipo: 'adicional',
+              filename: addFile.name,
+              content: extRes.text,
+            })
+          } catch (addErr) {
+            console.warn(`[POST /api/generate] Skipping unreadable additional file ${addFile.name}:`, addErr)
+          }
         }
       }
+    } catch (extractErr) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: extractErr instanceof Error ? extractErr.message : 'Error al procesar los documentos rectores.',
+        },
+        { status: 422 }
+      )
     }
+  }
 
+  // Non-blocking cleanup of temporary upload files from Supabase Storage
+  if (tempStoragePathsToClean.length > 0) {
+    supabaseAdmin.storage
+      .from(STORAGE_BUCKET)
+      .remove(tempStoragePathsToClean)
+      .catch((cleanupErr) => console.warn('[generate] Warning cleaning temporary storage paths:', cleanupErr))
+  }
+
+  try {
     // Verify that at least some readable text was extracted
     const totalChars = contextDocs.reduce((acc, doc) => acc + doc.content.length, 0)
     if (totalChars < 50) {
