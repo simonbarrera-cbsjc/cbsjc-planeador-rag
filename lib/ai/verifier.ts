@@ -188,7 +188,10 @@ export function verifyPlanningBook(input: VerifyInput): VerificationReport {
   if (placeholders.length > 0) add('critico', 'Plantilla', `Quedaron ${placeholders.length} marcador(es) de plantilla sin redactar (p. ej. "${(placeholders[0] || '').slice(0, 60)}…").`)
 
   // 7. Template-example leakage (content of the institutional example that does not belong to this area/topic)
-  const leaks = LEAK_TERMS.filter((t) => outNorm.includes(t) && !refNorm.includes(t))
+  const isScienceArea = /natural|biolog|quimic|fisic[ao]|ecolog|ambient/i.test(normalizeForMatch(area))
+  const leaks = isScienceArea
+    ? []
+    : LEAK_TERMS.filter((t) => outNorm.includes(t) && !refNorm.includes(t))
   if (leaks.length > 0) {
     add('advertencia', 'Coherencia disciplinar', `Aparecen términos que no corresponden al área/tema ni a los documentos (${leaks.join(', ')}); posible contenido heredado del ejemplo.`)
   }
